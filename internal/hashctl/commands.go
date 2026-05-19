@@ -293,9 +293,6 @@ func (a *app) runJobCreate(ctx context.Context, client *Client, args []string) (
 		}
 		request.BlobNames = append(request.BlobNames, fileBlobs...)
 	}
-	if request.Prefix == "" && len(request.BlobNames) == 0 {
-		return nil, fmt.Errorf("provide --prefix, --blob-name, or --blob-list-file")
-	}
 	if request.BatchSize < 0 {
 		return nil, fmt.Errorf("--batch-size must be at least 1 when supplied")
 	}

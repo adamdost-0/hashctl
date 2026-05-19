@@ -96,6 +96,34 @@ func TestJobCreateSendsExpectedBodyAndHeaders(t *testing.T) {
 	}
 }
 
+func TestJobCreateAutoDiscoveryWithoutPrefix(t *testing.T) {
+	var body JobCreateRequest
+	code, _, stderr := runTest(
+		[]string{
+			"--output", "json",
+			"job", "create",
+			"--source-account", "sthashsource",
+			"--source-container", "input",
+		},
+		nil,
+		func(w http.ResponseWriter, r *http.Request) {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			writeJSONResponse(t, w, http.StatusAccepted, jobPayload("job-1", "hashing"))
+		},
+	)
+	if code != ExitSuccess {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if body.SourceAccount != "sthashsource" || body.SourceContainer != "input" {
+		t.Fatalf("unexpected body: %+v", body)
+	}
+	if body.Prefix != "" || len(body.BlobNames) != 0 {
+		t.Fatalf("expected no prefix or blob_names, got: prefix=%q blobs=%v", body.Prefix, body.BlobNames)
+	}
+}
+
 func TestHealthReadyUsesReadyRoute(t *testing.T) {
 	code, stdout, stderr := runTest([]string{"health", "ready"}, nil, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/health/ready" {
