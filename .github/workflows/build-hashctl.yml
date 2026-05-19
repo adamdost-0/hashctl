@@ -31,39 +31,28 @@ jobs:
         run: |
           VERSION=$(jq -r .version package.json)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
       - name: Build and package
         run: ./scripts/package-hashctl.sh
         env:
           HASHCTL_VERSION: ${{ steps.version.outputs.version }}
           GOOS: linux
           GOARCH: amd64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hashctl-linux-amd64
-          path: artifacts/hashctl/hashctl-*.tar.gz*
-
-  release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: hashctl-linux-amd64
-          path: artifacts/
-      - name: Read version
-        id: version
+      - name: Verify artifact
         run: |
-          VERSION=$(jq -r .version package.json)
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          ls -la artifacts/hashctl/hashctl-*.tar.gz
+          cat artifacts/hashctl/hashctl-*.sha256
       - name: Upload to release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" artifacts/hashctl-*.tar.gz artifacts/hashctl-*.sha256 --clobber
+            gh release upload "$TAG" \
+              artifacts/hashctl/hashctl-*.tar.gz \
+              artifacts/hashctl/hashctl-*.tar.gz.sha256 \
+              --clobber
           else
             echo "Release $TAG not found — skipping asset upload"
           fi
