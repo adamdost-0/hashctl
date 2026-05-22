@@ -372,7 +372,7 @@ func (a *app) runSign(ctx context.Context, client *Client, _ Config, args []stri
 	req := SignRequest{}
 	fs.StringVar(&req.KeyID, "key-id", "", "development key id")
 	fs.StringVar(&req.KeyVersion, "key-version", "", "development key version")
-	fs.StringVar(&req.KeyName, "key-name", "", "development key name")
+	fs.StringVar(&req.KeyName, "key-name", "", "existing Key Vault key name")
 	if err := fs.Parse(args[1:]); err != nil {
 		return nil, err
 	}
