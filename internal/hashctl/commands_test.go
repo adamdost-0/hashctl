@@ -257,6 +257,84 @@ func TestSignFirstSendsJobIDInBody(t *testing.T) {
 	}
 }
 
+func TestSignAcceptsFlagsAfterJobID(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		path string
+	}{
+		{
+			name: "first",
+			args: []string{
+				"sign", "first", "job-1",
+				"--key-id", "kid-1",
+				"--key-version", "version-1",
+				"--key-name", "dev-first",
+			},
+			path: "/sign/first-signature",
+		},
+		{
+			name: "second",
+			args: []string{
+				"sign", "second", "job-1",
+				"--key-id", "kid-1",
+				"--key-version", "version-1",
+				"--key-name", "dev-second",
+			},
+			path: "/sign/second-signature",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body SignRequest
+			code, _, stderr := runTest(tt.args, nil, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.path {
+					t.Fatalf("path = %s", r.URL.Path)
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatal(err)
+				}
+				writeJSONResponse(t, w, http.StatusOK, map[string]any{
+					"job": jobPayload("job-1", "complete"),
+					"signature": map[string]any{
+						"job_id":           "job-1",
+						"signature_number": 1,
+						"signer_object_id": "requestor-1",
+						"key_id":           "key-1",
+					},
+				})
+			})
+			if code != ExitSuccess {
+				t.Fatalf("code=%d stderr=%s", code, stderr)
+			}
+			expectedKeyName := "dev-" + tt.name
+			if body.JobID != "job-1" ||
+				body.KeyID != "kid-1" ||
+				body.KeyVersion != "version-1" ||
+				body.KeyName != expectedKeyName {
+				t.Fatalf("body = %+v", body)
+			}
+		})
+	}
+}
+
+func TestSignRejectsExtraPositionalArgsAfterFlexibleParsing(t *testing.T) {
+	code, _, stderr := runTest(
+		[]string{"sign", "first", "job-1", "extra", "--key-name", "dev-first"},
+		nil,
+		func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatal("handler should not be called")
+		},
+	)
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "usage: hashctl sign first <job_id>") {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
 func TestAPIErrorUsesExitCodeAndJSONShape(t *testing.T) {
 	code, _, stderr := runTest([]string{"--output", "json", "sign", "first", "job-1"}, nil, func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(t, w, http.StatusConflict, map[string]any{

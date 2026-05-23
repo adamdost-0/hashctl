@@ -422,14 +422,67 @@ func (a *app) runSign(ctx context.Context, client *Client, _ Config, args []stri
 	fs.StringVar(&req.KeyID, "key-id", "", "development key id")
 	fs.StringVar(&req.KeyVersion, "key-version", "", "development key version")
 	fs.StringVar(&req.KeyName, "key-name", "", "existing Key Vault key name")
-	if err := fs.Parse(args[1:]); err != nil {
+	flagArgs, positionalArgs := partitionSignArgs(args[1:])
+	if err := fs.Parse(flagArgs); err != nil {
 		return nil, err
 	}
-	if fs.NArg() != 1 {
+	if len(positionalArgs) != 1 {
 		return nil, fmt.Errorf("usage: hashctl sign %s <job_id>", args[0])
 	}
-	req.JobID = fs.Arg(0)
+	req.JobID = positionalArgs[0]
 	return client.Sign(ctx, first, req)
+}
+
+func partitionSignArgs(args []string) ([]string, []string) {
+	knownFlags := map[string]struct{}{
+		"key-id":      {},
+		"key-version": {},
+		"key-name":    {},
+	}
+	flagArgs := make([]string, 0, len(args))
+	positionalArgs := make([]string, 0, 1)
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			positionalArgs = append(positionalArgs, args[i+1:]...)
+			break
+		}
+		name, hasInlineValue, ok := flagName(arg)
+		if !ok {
+			positionalArgs = append(positionalArgs, arg)
+			continue
+		}
+		flagArgs = append(flagArgs, arg)
+		if _, known := knownFlags[name]; !known || hasInlineValue {
+			continue
+		}
+		if i+1 < len(args) {
+			i++
+			flagArgs = append(flagArgs, args[i])
+		}
+	}
+	return flagArgs, positionalArgs
+}
+
+func flagName(arg string) (string, bool, bool) {
+	if strings.HasPrefix(arg, "--") {
+		return splitFlagName(arg[2:])
+	}
+	if strings.HasPrefix(arg, "-") {
+		return splitFlagName(arg[1:])
+	}
+	return "", false, false
+}
+
+func splitFlagName(value string) (string, bool, bool) {
+	if value == "" {
+		return "", false, false
+	}
+	name, _, hasInlineValue := strings.Cut(value, "=")
+	if name == "" {
+		return "", false, false
+	}
+	return name, hasInlineValue, true
 }
 
 func (a *app) writeHuman(result any) error {
