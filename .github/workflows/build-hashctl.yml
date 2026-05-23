@@ -51,30 +51,14 @@ jobs:
           artifact="artifacts/hashctl/hashctl-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
           ls -la "$artifact" "$artifact.sha256"
           (cd artifacts/hashctl && shasum -a 256 -c "$(basename "$artifact").sha256")
-      - name: Upload artifact bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: hashctl-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            artifacts/hashctl/hashctl-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-            artifacts/hashctl/hashctl-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
-
-  release-upload:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download packaged artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/hashctl
       - name: Upload to release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="$(jq -r .version package.json)"
-          TAG="v${VERSION}"
+          artifact="artifacts/hashctl/hashctl-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
+          checksum="${artifact}.sha256"
+          TAG="${{ steps.version.outputs.tag }}"
           max_attempts=12
           sleep_seconds=10
           attempt=1
@@ -87,4 +71,4 @@ jobs:
             sleep "$sleep_seconds"
             attempt=$((attempt + 1))
           done
-          gh release upload "$TAG" artifacts/hashctl/*/* --clobber
+          gh release upload "$TAG" "$artifact" "$checksum" --clobber
