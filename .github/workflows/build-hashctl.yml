@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -37,9 +39,14 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(jq -r .version package.json)
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(./scripts/get-hashctl-version.sh)
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Version: $VERSION (tag: v$VERSION)"
       - name: Build and package
         run: ./scripts/package-hashctl.sh
         env:
@@ -52,7 +59,7 @@ jobs:
           ls -la "$artifact" "$artifact.sha256"
           (cd artifacts/hashctl && shasum -a 256 -c "$(basename "$artifact").sha256")
       - name: Upload to release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -72,3 +79,11 @@ jobs:
             attempt=$((attempt + 1))
           done
           gh release upload "$TAG" "$artifact" "$checksum" --clobber
+
+      - name: Verify release asset download
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HASHCTL_VERSION: ${{ steps.version.outputs.version }}
+          HASHCTL_PLATFORM: ${{ matrix.goos }}-${{ matrix.goarch }}
+        run: ./scripts/verify-hashctl-release.sh
