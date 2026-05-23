@@ -18,6 +18,8 @@ type app struct {
 	httpClient *http.Client
 }
 
+var Version = "dev"
+
 func Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	return New(stdout, stderr, os.Getenv, nil).Run(args)
 }
@@ -35,6 +37,13 @@ func (a *app) Run(args []string) int {
 	if len(commandArgs) == 0 {
 		writeError(a.stderr, global.Output, fmt.Errorf("command is required"))
 		return ExitUsage
+	}
+	if handled, err := a.handleMetaCommand(commandArgs); handled {
+		if err != nil {
+			writeError(a.stderr, global.Output, err)
+			return ExitUsage
+		}
+		return ExitSuccess
 	}
 	cfg, err := resolveConfig(global, a.getenv)
 	if err != nil {
@@ -201,6 +210,8 @@ func parseGlobal(args []string) (Config, []string, error) {
 			}
 		case "--help", "-h":
 			return cfg, []string{"help"}, nil
+		case "--version":
+			return cfg, []string{"version"}, nil
 		default:
 			return cfg, nil, fmt.Errorf("unknown global flag %s", name)
 		}
@@ -208,6 +219,41 @@ func parseGlobal(args []string) (Config, []string, error) {
 	cfg.LocalGroups = groups
 	cfg.LocalAppRoles = roles
 	return cfg, nil, nil
+}
+
+func (a *app) handleMetaCommand(args []string) (bool, error) {
+	switch args[0] {
+	case "help":
+		return true, writeHelp(a.stdout, args[1:])
+	case "version":
+		_, err := fmt.Fprintf(a.stdout, "hashctl %s\n", versionString())
+		return true, err
+	case "health", "job", "manifest", "sign", "smoke":
+		path := stripHelpFlags(args)
+		if len(path) != len(args) {
+			return true, writeHelp(a.stdout, path)
+		}
+	}
+	return false, nil
+}
+
+func stripHelpFlags(args []string) []string {
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return filtered
+}
+
+func versionString() string {
+	version := strings.TrimSpace(Version)
+	if version == "" {
+		return "dev"
+	}
+	return version
 }
 
 func (a *app) runHealth(ctx context.Context, client *Client, cfg Config, args []string) (any, error) {

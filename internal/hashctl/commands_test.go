@@ -334,3 +334,82 @@ func TestSmokeMultiJobSubmitsFiveJobsAndDoesNotSign(t *testing.T) {
 		t.Fatalf("stdout = %s", stdout)
 	}
 }
+
+func runLocal(args []string, env map[string]string) (int, string, string) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := New(&stdout, &stderr, testEnv(env), nil).Run(args)
+	return code, stdout.String(), stderr.String()
+}
+
+func TestTopLevelHelpCommandsDoNotRequireAPIConfig(t *testing.T) {
+	cases := [][]string{
+		{"--help"},
+		{"-h"},
+		{"help"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			code, stdout, stderr := runLocal(args, nil)
+			if code != ExitSuccess {
+				t.Fatalf("code=%d stderr=%s", code, stderr)
+			}
+			if !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "hashctl [global flags] <command> [command flags]") {
+				t.Fatalf("stdout = %q", stdout)
+			}
+		})
+	}
+}
+
+func TestCommandHelpDoesNotRequireAPIConfig(t *testing.T) {
+	cases := []struct {
+		name     string
+		args     []string
+		contains string
+	}{
+		{name: "help health", args: []string{"help", "health"}, contains: "hashctl health [ready]"},
+		{name: "health --help", args: []string{"health", "--help"}, contains: "hashctl health [ready]"},
+		{name: "job --help", args: []string{"job", "--help"}, contains: "hashctl job <subcommand> [flags]"},
+		{name: "manifest --help", args: []string{"manifest", "--help"}, contains: "hashctl manifest <subcommand> [flags]"},
+		{name: "sign --help", args: []string{"sign", "--help"}, contains: "hashctl sign <first|second> <job_id> [flags]"},
+		{name: "smoke --help", args: []string{"smoke", "--help"}, contains: "hashctl smoke <single-job|multi-job> [flags]"},
+		{name: "job create --help", args: []string{"job", "create", "--help"}, contains: "hashctl job create --source-account NAME --source-container NAME [flags]"},
+		{name: "manifest get --help", args: []string{"manifest", "get", "--help"}, contains: "hashctl manifest get <job_id> [--output-file PATH]"},
+		{name: "sign first --help", args: []string{"sign", "first", "--help"}, contains: "hashctl sign first <job_id>"},
+		{name: "smoke single-job --help", args: []string{"smoke", "single-job", "--help"}, contains: "hashctl smoke single-job --source-account NAME --source-container NAME --prefix PREFIX [flags]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, stdout, stderr := runLocal(tc.args, nil)
+			if code != ExitSuccess {
+				t.Fatalf("code=%d stderr=%s", code, stderr)
+			}
+			if !strings.Contains(stdout, tc.contains) {
+				t.Fatalf("stdout = %q", stdout)
+			}
+		})
+	}
+}
+
+func TestVersionCommandsDoNotRequireAPIConfig(t *testing.T) {
+	originalVersion := Version
+	Version = "dev"
+	t.Cleanup(func() {
+		Version = originalVersion
+	})
+	cases := [][]string{
+		{"version"},
+		{"--version"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			code, stdout, stderr := runLocal(args, nil)
+			if code != ExitSuccess {
+				t.Fatalf("code=%d stderr=%s", code, stderr)
+			}
+			if strings.TrimSpace(stdout) != "hashctl dev" {
+				t.Fatalf("stdout = %q", stdout)
+			}
+		})
+	}
+}

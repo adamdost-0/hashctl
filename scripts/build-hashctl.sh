@@ -2,4 +2,6 @@
 set -euo pipefail
 
 mkdir -p bin
-GOPROXY=off GOSUMDB=off go build -o bin/hashctl ./cmd/hashctl
+version="${HASHCTL_VERSION:-dev}"
+ldflags="-X github.com/adamdost-0/hash-engine/internal/hashctl.Version=${version}"
+GOPROXY=off GOSUMDB=off go build -ldflags "${ldflags}" -o bin/hashctl ./cmd/hashctl
