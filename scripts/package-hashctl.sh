@@ -11,6 +11,7 @@ ldflags="-X github.com/adamdost-0/hash-engine/internal/hashctl.Version=${version
 
 mkdir -p "${artifact_dir}/${package_name}"
 GOPROXY=off GOSUMDB=off go build -ldflags "${ldflags}" -o "${artifact_dir}/${package_name}/hashctl" ./cmd/hashctl
+chmod 0755 "${artifact_dir}/${package_name}/hashctl"
 tar -C "${artifact_dir}" -czf "${artifact_dir}/${archive_name}" "${package_name}"
 (
   cd "${artifact_dir}"

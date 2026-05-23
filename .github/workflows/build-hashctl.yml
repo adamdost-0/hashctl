@@ -61,7 +61,7 @@ jobs:
       - name: Upload to release
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           artifact="artifacts/hashctl/hashctl-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
           checksum="${artifact}.sha256"
@@ -69,7 +69,7 @@ jobs:
           max_attempts=12
           sleep_seconds=10
           attempt=1
-          until gh release view "$TAG" >/dev/null 2>&1; do
+          until gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; do
             if [ "$attempt" -ge "$max_attempts" ]; then
               echo "Release ${TAG} not found after $((max_attempts * sleep_seconds))s"
               exit 1
@@ -78,7 +78,7 @@ jobs:
             sleep "$sleep_seconds"
             attempt=$((attempt + 1))
           done
-          gh release upload "$TAG" "$artifact" "$checksum" --clobber
+          gh release upload "$TAG" "$artifact" "$checksum" --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Verify release asset download
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
