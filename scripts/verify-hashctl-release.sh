@@ -44,15 +44,33 @@ gh release download "${release_tag}" \
 )
 
 binary="${download_dir}/hashctl-${version}-${platform}/hashctl"
-if [[ ! -x "${binary}" ]]; then
+if [[ ! -f "${binary}" ]]; then
   echo "Expected binary not found at ${binary}" >&2
   exit 1
 fi
 
-version_output="$(${binary} version)"
-version_output="${version_output#hashctl }"
-if [[ "${version_output}" != "${version}" ]]; then
-  echo "Expected version '${version}', got '${version_output}'" >&2
+file_output="$(file "${binary}")"
+case "${platform}" in
+  linux-amd64)
+    if [[ "${file_output}" != *"ELF 64-bit LSB executable"* ]]; then
+      echo "Expected linux-amd64 executable metadata, got: ${file_output}" >&2
+      exit 1
+    fi
+    ;;
+  darwin-arm64)
+    if [[ "${file_output}" != *"Mach-O 64-bit"* ]] || [[ "${file_output}" != *"arm64"* ]]; then
+      echo "Expected darwin-arm64 executable metadata, got: ${file_output}" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "Unsupported platform '${platform}'" >&2
+    exit 1
+    ;;
+esac
+
+if ! strings "${binary}" | grep -F "${version}" >/dev/null; then
+  echo "Expected embedded version '${version}' not found in ${binary}" >&2
   exit 1
 fi
 
