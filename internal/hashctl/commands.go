@@ -35,8 +35,11 @@ func (a *app) Run(args []string) int {
 		return ExitUsage
 	}
 	if len(commandArgs) == 0 {
-		writeError(a.stderr, global.Output, fmt.Errorf("command is required"))
-		return ExitUsage
+		if err := writeHelp(a.stdout, nil); err != nil {
+			writeError(a.stderr, global.Output, err)
+			return ExitUsage
+		}
+		return ExitSuccess
 	}
 	if handled, err := a.handleMetaCommand(commandArgs); handled {
 		if err != nil {

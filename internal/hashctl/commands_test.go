@@ -343,18 +343,27 @@ func runLocal(args []string, env map[string]string) (int, string, string) {
 }
 
 func TestTopLevelHelpCommandsDoNotRequireAPIConfig(t *testing.T) {
-	cases := [][]string{
-		{"--help"},
-		{"-h"},
-		{"help"},
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "no args", args: nil},
+		{name: "--help", args: []string{"--help"}},
+		{name: "-h", args: []string{"-h"}},
+		{name: "help", args: []string{"help"}},
 	}
-	for _, args := range cases {
-		t.Run(strings.Join(args, "_"), func(t *testing.T) {
-			code, stdout, stderr := runLocal(args, nil)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, stdout, stderr := runLocal(tc.args, nil)
 			if code != ExitSuccess {
 				t.Fatalf("code=%d stderr=%s", code, stderr)
 			}
-			if !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "hashctl [global flags] <command> [command flags]") {
+			if stderr != "" {
+				t.Fatalf("stderr = %q", stderr)
+			}
+			if !strings.Contains(stdout, "Hash Engine command-line client") ||
+				!strings.Contains(stdout, "Usage:") ||
+				!strings.Contains(stdout, "hashctl [global flags] <command> [command flags]") {
 				t.Fatalf("stdout = %q", stdout)
 			}
 		})

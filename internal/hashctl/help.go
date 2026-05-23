@@ -64,7 +64,9 @@ func writeHelp(w io.Writer, path []string) error {
 	}
 }
 
-const topLevelHelpText = `Usage:
+const topLevelHelpText = `Hash Engine command-line client for CTS manifest jobs and signing.
+
+Usage:
   hashctl [global flags] <command> [command flags]
   hashctl help [command]
 
@@ -75,6 +77,12 @@ Commands:
   sign                  Apply first or second signature
   smoke                 Run smoke test flows
   version               Print hashctl version
+
+Common commands:
+  hashctl health
+  hashctl job create --source-account NAME --source-container NAME [flags]
+  hashctl sign first <job_id> --key-name NAME
+  hashctl sign second <job_id> --key-name NAME
 
 Global flags (must appear before <command>):
   --api-url URL
