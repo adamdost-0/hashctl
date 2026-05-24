@@ -77,15 +77,17 @@ type JobRecord struct {
 	RequestorObjectID string            `json:"requestor_object_id"`
 	Status            string            `json:"status"`
 	CloudName         string            `json:"cloud_name"`
-	SourceAccount     string            `json:"source_account"`
-	SourceContainer   string            `json:"source_container"`
+	SourceAccount     *string           `json:"source_account"`
+	SourceContainer   *string           `json:"source_container"`
 	SourcePrefix      *string           `json:"source_prefix"`
 	OutputAccount     *string           `json:"output_account"`
 	OutputContainer   *string           `json:"output_container"`
 	OutputPath        *string           `json:"output_path"`
 	BatchSize         *int              `json:"batch_size"`
 	ExpectedBlobCount int               `json:"expected_blob_count"`
-	CorrelationID     string            `json:"correlation_id"`
+	CorrelationID     *string           `json:"correlation_id"`
+	CreatedAt         string            `json:"created_at"`
+	UpdatedAt         string            `json:"updated_at"`
 	FailureReason     *string           `json:"failure_reason"`
 	Metadata          map[string]string `json:"metadata"`
 	Raw               json.RawMessage   `json:"-"`
@@ -107,9 +109,12 @@ type SignRequest struct {
 type SignatureRecord struct {
 	JobID           string         `json:"job_id"`
 	SignatureNumber int            `json:"signature_number"`
-	SignerObjectID  string         `json:"signer_object_id"`
+	SignerObjectID  *string        `json:"signer_object_id"`
+	SignerKeyName   *string        `json:"signer_key_name"`
 	KeyID           string         `json:"key_id"`
-	KeyVersion      string         `json:"key_version"`
+	KeyVersion      *string        `json:"key_version"`
+	KeyName         *string        `json:"key_name"`
+	SignedAt        string         `json:"signed_at"`
 	PolicyMetadata  map[string]any `json:"policy_metadata"`
 }
 

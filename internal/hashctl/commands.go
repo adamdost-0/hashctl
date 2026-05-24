@@ -385,7 +385,10 @@ func (a *app) runManifest(ctx context.Context, client *Client, cfg Config, args 
 			return nil, err
 		}
 		if fs.NArg() != 1 {
-			return nil, fmt.Errorf("usage: hashctl manifest get <job_id> [--output-file path]")
+			return nil, fmt.Errorf("usage: hashctl manifest get [--output-file path] <job_id>")
+		}
+		if cfg.Output != "json" && outputFile == "" {
+			return nil, fmt.Errorf("--output-file is required in human mode; use --output json for API response")
 		}
 		manifest, err := client.GetManifest(ctx, fs.Arg(0))
 		if err != nil {
@@ -394,14 +397,10 @@ func (a *app) runManifest(ctx context.Context, client *Client, cfg Config, args 
 		if cfg.Output == "json" {
 			return manifest, nil
 		}
-		if outputFile != "" {
-			if err := os.WriteFile(outputFile, []byte(manifest.ManifestXML), 0o600); err != nil {
-				return nil, fmt.Errorf("write manifest file: %w", err)
-			}
-			_, err = fmt.Fprintf(a.stdout, "wrote manifest %s to %s\n", manifest.JobID, outputFile)
-			return nil, err
+		if err := os.WriteFile(outputFile, []byte(manifest.ManifestXML), 0o600); err != nil {
+			return nil, fmt.Errorf("write manifest file: %w", err)
 		}
-		_, err = fmt.Fprint(a.stdout, manifest.ManifestXML)
+		_, err = fmt.Fprintf(a.stdout, "wrote manifest %s to %s\n", manifest.JobID, outputFile)
 		return nil, err
 	default:
 		return nil, fmt.Errorf("unknown manifest subcommand %q", args[0])

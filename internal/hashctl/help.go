@@ -153,7 +153,7 @@ const manifestHelpText = `Usage:
 
 Subcommands:
   build <job_id>                 Trigger manifest build
-  get <job_id> [--output-file]   Retrieve manifest XML
+  get [--output-file PATH] <job_id>   Retrieve manifest XML
 `
 
 const manifestBuildHelpText = `Usage:
@@ -161,7 +161,11 @@ const manifestBuildHelpText = `Usage:
 `
 
 const manifestGetHelpText = `Usage:
-  hashctl manifest get <job_id> [--output-file PATH]
+  hashctl manifest get [--output-file PATH] <job_id>
+
+Notes:
+  Human output mode requires --output-file PATH.
+  Use --output json for machine-readable API responses.
 `
 
 const signHelpText = `Usage:

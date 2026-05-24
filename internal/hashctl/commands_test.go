@@ -47,6 +47,8 @@ func jobPayload(id string, status string) map[string]any {
 		"source_container":    "input",
 		"expected_blob_count": 3,
 		"correlation_id":      "corr-1",
+		"created_at":          "2026-05-18T00:00:00Z",
+		"updated_at":          "2026-05-18T00:00:10Z",
 		"metadata":            map[string]string{},
 	}
 }
@@ -205,17 +207,83 @@ func TestJobCommandsUseDocumentedRoutes(t *testing.T) {
 	}
 }
 
-func TestManifestGetExtractsXML(t *testing.T) {
-	code, stdout, stderr := runTest([]string{"manifest", "get", "job-1"}, nil, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/job/job-1/manifest" {
-			t.Fatalf("path = %s", r.URL.Path)
-		}
-		writeJSONResponse(t, w, http.StatusOK, ManifestResponse{JobID: "job-1", Status: "complete", ManifestXML: "<Root/>"})
+func TestManifestGetRequiresOutputFileInHumanMode(t *testing.T) {
+	code, _, stderr := runTest([]string{"manifest", "get", "job-1"}, nil, func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called")
 	})
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "--output-file is required in human mode") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestManifestGetUsageShowsFlagBeforeJobID(t *testing.T) {
+	code, _, stderr := runTest(
+		[]string{"manifest", "get", "--output-file", "file-a.xml", "job-1", "extra"},
+		nil,
+		func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatal("handler should not be called")
+		},
+	)
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "usage: hashctl manifest get [--output-file path] <job_id>") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestManifestGetWritesXMLWhenOutputFileSupplied(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "manifest.xml")
+	code, stdout, stderr := runTest(
+		[]string{"manifest", "get", "--output-file", outputPath, "job-1"},
+		nil,
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/job/job-1/manifest" {
+				t.Fatalf("path = %s", r.URL.Path)
+			}
+			writeJSONResponse(t, w, http.StatusOK, ManifestResponse{JobID: "job-1", Status: "complete", ManifestXML: "<Root/>"})
+		},
+	)
 	if code != ExitSuccess {
 		t.Fatalf("code=%d stderr=%s", code, stderr)
 	}
-	if stdout != "<Root/>" {
+	if !strings.Contains(stdout, "wrote manifest job-1 to "+outputPath) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "<Root/>" {
+		t.Fatalf("data = %q", string(data))
+	}
+	info, err := os.Stat(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o", info.Mode().Perm())
+	}
+}
+
+func TestManifestGetJSONReturnsManifestPayloadWithoutOutputFile(t *testing.T) {
+	code, stdout, stderr := runTest(
+		[]string{"--output", "json", "manifest", "get", "job-1"},
+		nil,
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/job/job-1/manifest" {
+				t.Fatalf("path = %s", r.URL.Path)
+			}
+			writeJSONResponse(t, w, http.StatusOK, ManifestResponse{JobID: "job-1", Status: "complete", ManifestXML: "<Root/>"})
+		},
+	)
+	if code != ExitSuccess {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, `"manifest_xml": "\u003cRoot/\u003e"`) {
 		t.Fatalf("stdout = %q", stdout)
 	}
 }
@@ -254,6 +322,48 @@ func TestSignFirstSendsJobIDInBody(t *testing.T) {
 	}
 	if body.JobID != "job-1" || body.KeyName != "dev-first" {
 		t.Fatalf("body = %+v", body)
+	}
+}
+
+func TestJobGetJSONIncludesTimestampFields(t *testing.T) {
+	code, stdout, stderr := runTest([]string{"--output", "json", "job", "get", "job-1"}, nil, func(w http.ResponseWriter, r *http.Request) {
+		writeJSONResponse(t, w, http.StatusOK, jobPayload("job-1", "queued"))
+	})
+	if code != ExitSuccess {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, `"created_at": "2026-05-18T00:00:00Z"`) ||
+		!strings.Contains(stdout, `"updated_at": "2026-05-18T00:00:10Z"`) {
+		t.Fatalf("stdout = %s", stdout)
+	}
+}
+
+func TestSignJSONIncludesSignerAndKeyNameFields(t *testing.T) {
+	code, stdout, stderr := runTest([]string{"--output", "json", "sign", "first", "job-1"}, nil, func(w http.ResponseWriter, r *http.Request) {
+		writeJSONResponse(t, w, http.StatusOK, map[string]any{
+			"job": jobPayload("job-1", "awaiting_second_signature"),
+			"signature": map[string]any{
+				"job_id":           "job-1",
+				"signature_number": 1,
+				"signer_object_id": "requestor-1",
+				"signer_key_name":  "dev-first-signer",
+				"key_id":           "key-1",
+				"key_version":      "version-1",
+				"key_name":         "dev-first-signer",
+				"signed_at":        "2026-05-18T00:00:20Z",
+				"policy_metadata": map[string]any{
+					"provider_mode": "request_key_name",
+				},
+			},
+		})
+	})
+	if code != ExitSuccess {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, `"signer_key_name": "dev-first-signer"`) ||
+		!strings.Contains(stdout, `"key_name": "dev-first-signer"`) ||
+		!strings.Contains(stdout, `"signed_at": "2026-05-18T00:00:20Z"`) {
+		t.Fatalf("stdout = %s", stdout)
 	}
 }
 
@@ -461,7 +571,7 @@ func TestCommandHelpDoesNotRequireAPIConfig(t *testing.T) {
 		{name: "sign --help", args: []string{"sign", "--help"}, contains: "hashctl sign <first|second> <job_id> [flags]"},
 		{name: "smoke --help", args: []string{"smoke", "--help"}, contains: "hashctl smoke <single-job|multi-job> [flags]"},
 		{name: "job create --help", args: []string{"job", "create", "--help"}, contains: "hashctl job create --source-account NAME --source-container NAME [flags]"},
-		{name: "manifest get --help", args: []string{"manifest", "get", "--help"}, contains: "hashctl manifest get <job_id> [--output-file PATH]"},
+		{name: "manifest get --help", args: []string{"manifest", "get", "--help"}, contains: "hashctl manifest get [--output-file PATH] <job_id>"},
 		{name: "sign first --help", args: []string{"sign", "first", "--help"}, contains: "hashctl sign first <job_id>"},
 		{name: "smoke single-job --help", args: []string{"smoke", "single-job", "--help"}, contains: "hashctl smoke single-job --source-account NAME --source-container NAME --prefix PREFIX [flags]"},
 	}

@@ -13,13 +13,17 @@ func writeJSON(w io.Writer, value any) error {
 }
 
 func writeJobSummary(w io.Writer, job JobRecord) error {
+	correlationID := ""
+	if job.CorrelationID != nil {
+		correlationID = *job.CorrelationID
+	}
 	_, err := fmt.Fprintf(
 		w,
 		"job %s: status=%s expected_blobs=%d correlation_id=%s\n",
 		job.JobID,
 		job.Status,
 		job.ExpectedBlobCount,
-		job.CorrelationID,
+		correlationID,
 	)
 	if err != nil {
 		return err
@@ -52,13 +56,17 @@ func writeManifestSummary(w io.Writer, manifest ManifestResponse) error {
 }
 
 func writeSignatureSummary(w io.Writer, response SignatureResponse) error {
+	signer := ""
+	if response.Signature.SignerObjectID != nil {
+		signer = *response.Signature.SignerObjectID
+	}
 	_, err := fmt.Fprintf(
 		w,
 		"job %s: status=%s signature=%d signer=%s\n",
 		response.Job.JobID,
 		response.Job.Status,
 		response.Signature.SignatureNumber,
-		response.Signature.SignerObjectID,
+		signer,
 	)
 	return err
 }
