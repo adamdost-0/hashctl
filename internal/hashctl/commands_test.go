@@ -469,7 +469,7 @@ func TestJobGetForbiddenSurfacesAPIError(t *testing.T) {
 		writeJSONResponse(t, w, http.StatusForbidden, map[string]any{
 			"detail": map[string]any{
 				"error_code":     "job_forbidden",
-				"message":        "Only the job requestor can modify job state.",
+				"message":        "Only the job requestor can access this job.",
 				"job_id":         "job-1",
 				"correlation_id": "corr-1",
 			},
