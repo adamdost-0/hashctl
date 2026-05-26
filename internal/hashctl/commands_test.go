@@ -464,6 +464,25 @@ func TestAPIErrorUsesExitCodeAndJSONShape(t *testing.T) {
 	}
 }
 
+func TestJobGetForbiddenSurfacesAPIError(t *testing.T) {
+	code, _, stderr := runTest([]string{"--output", "json", "job", "get", "job-1"}, nil, func(w http.ResponseWriter, r *http.Request) {
+		writeJSONResponse(t, w, http.StatusForbidden, map[string]any{
+			"detail": map[string]any{
+				"error_code":     "job_forbidden",
+				"message":        "Only the job requestor can access this job.",
+				"job_id":         "job-1",
+				"correlation_id": "corr-1",
+			},
+		})
+	})
+	if code != ExitAPIClient {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, `"error_code": "job_forbidden"`) || !strings.Contains(stderr, `"http_status": 403`) {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
 func TestLiteralBearerTokenFlagIsRejected(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
