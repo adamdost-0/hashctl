@@ -177,6 +177,22 @@ func TestBearerTokenFileSetsAuthorizationHeader(t *testing.T) {
 	}
 }
 
+func TestBearerTokenFileRejectsWorldReadablePermissions(t *testing.T) {
+	tokenPath := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenPath, []byte("token-value\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := runTest([]string{"--bearer-token-file", tokenPath, "health"}, nil, func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called")
+	})
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "permissions are too open") || !strings.Contains(stderr, "chmod 600") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
 func TestJobCommandsUseDocumentedRoutes(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -230,7 +246,23 @@ func TestManifestGetUsageShowsFlagBeforeJobID(t *testing.T) {
 	if code != ExitUsage {
 		t.Fatalf("code=%d stderr=%s", code, stderr)
 	}
-	if !strings.Contains(stderr, "usage: hashctl manifest get [--output-file path] <job_id>") {
+	if !strings.Contains(stderr, "usage: hashctl manifest get [--output-file path] [--include-manifest-xml] <job_id>") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestManifestGetUsageShowsIncludeManifestXMLFlag(t *testing.T) {
+	code, _, stderr := runTest(
+		[]string{"manifest", "get", "--include-manifest-xml", "job-1", "extra"},
+		nil,
+		func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatal("handler should not be called")
+		},
+	)
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "usage: hashctl manifest get [--output-file path] [--include-manifest-xml] <job_id>") {
 		t.Fatalf("stderr = %q", stderr)
 	}
 }
@@ -272,6 +304,28 @@ func TestManifestGetWritesXMLWhenOutputFileSupplied(t *testing.T) {
 func TestManifestGetJSONReturnsManifestPayloadWithoutOutputFile(t *testing.T) {
 	code, stdout, stderr := runTest(
 		[]string{"--output", "json", "manifest", "get", "job-1"},
+		nil,
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/job/job-1/manifest" {
+				t.Fatalf("path = %s", r.URL.Path)
+			}
+			writeJSONResponse(t, w, http.StatusOK, ManifestResponse{JobID: "job-1", Status: "complete", ManifestXML: "<Root/>"})
+		},
+	)
+	if code != ExitSuccess {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if strings.Contains(stdout, `"manifest_xml"`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+	if !strings.Contains(stdout, `"manifest_xml_omitted": true`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
+func TestManifestGetJSONIncludesManifestXMLWhenOptedIn(t *testing.T) {
+	code, stdout, stderr := runTest(
+		[]string{"--output", "json", "manifest", "get", "--include-manifest-xml", "job-1"},
 		nil,
 		func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/job/job-1/manifest" {
@@ -497,6 +551,16 @@ func TestLiteralBearerTokenFlagIsRejected(t *testing.T) {
 	}
 }
 
+func TestHTTPAPIURLRejectsNonLoopbackHost(t *testing.T) {
+	code, _, stderr := runLocal([]string{"--api-url", "http://example.com", "health"}, nil)
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "https for non-loopback hosts") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
 func TestSmokeMultiJobSubmitsFiveJobsAndDoesNotSign(t *testing.T) {
 	var posts int
 	var signs int
@@ -590,7 +654,8 @@ func TestCommandHelpDoesNotRequireAPIConfig(t *testing.T) {
 		{name: "sign --help", args: []string{"sign", "--help"}, contains: "hashctl sign <first|second> <job_id> [flags]"},
 		{name: "smoke --help", args: []string{"smoke", "--help"}, contains: "hashctl smoke <single-job|multi-job> [flags]"},
 		{name: "job create --help", args: []string{"job", "create", "--help"}, contains: "hashctl job create --source-account NAME --source-container NAME [flags]"},
-		{name: "manifest get --help", args: []string{"manifest", "get", "--help"}, contains: "hashctl manifest get [--output-file PATH] <job_id>"},
+		{name: "manifest get --help", args: []string{"manifest", "get", "--help"}, contains: "hashctl manifest get [--output-file PATH] [--include-manifest-xml] <job_id>"},
+		{name: "manifest get --help includes redact flag", args: []string{"manifest", "get", "--help"}, contains: "--include-manifest-xml"},
 		{name: "sign first --help", args: []string{"sign", "first", "--help"}, contains: "hashctl sign first <job_id>"},
 		{name: "smoke single-job --help", args: []string{"smoke", "single-job", "--help"}, contains: "hashctl smoke single-job --source-account NAME --source-container NAME --prefix PREFIX [flags]"},
 	}

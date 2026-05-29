@@ -161,11 +161,11 @@ const manifestBuildHelpText = `Usage:
 `
 
 const manifestGetHelpText = `Usage:
-  hashctl manifest get [--output-file PATH] <job_id>
+  hashctl manifest get [--output-file PATH] [--include-manifest-xml] <job_id>
 
 Notes:
   Human output mode requires --output-file PATH.
-  Use --output json for machine-readable API responses.
+  JSON output omits manifest_xml unless --include-manifest-xml is set.
 `
 
 const signHelpText = `Usage:
