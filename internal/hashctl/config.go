@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -87,6 +89,9 @@ func resolveConfig(flags Config, getenv envLookup) (Config, error) {
 	}
 	if flags.BearerTokenFile != "" {
 		cfg.BearerTokenFile = flags.BearerTokenFile
+		if err := validateBearerTokenFilePermissions(flags.BearerTokenFile); err != nil {
+			return Config{}, err
+		}
 		token, err := os.ReadFile(flags.BearerTokenFile)
 		if err != nil {
 			return Config{}, fmt.Errorf("read bearer token file: %w", err)
@@ -113,6 +118,9 @@ func resolveConfig(flags Config, getenv envLookup) (Config, error) {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return Config{}, fmt.Errorf("API URL scheme must be http or https")
 	}
+	if parsed.Scheme == "http" && !isLoopbackHost(parsed.Hostname()) {
+		return Config{}, fmt.Errorf("API URL must use https for non-loopback hosts; http is allowed only for localhost, 127.0.0.1, or ::1")
+	}
 	if cfg.Timeout <= 0 {
 		return Config{}, fmt.Errorf("timeout must be greater than zero")
 	}
@@ -138,4 +146,31 @@ func readConfigFile(path string) (Config, error) {
 		return Config{}, fmt.Errorf("parse config file: %w", err)
 	}
 	return cfg, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func validateBearerTokenFilePermissions(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat bearer token file: %w", err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf(
+			"bearer token file %q permissions are too open (%#o); require owner-only access (chmod 600 %s)",
+			path,
+			info.Mode().Perm(),
+			path,
+		)
+	}
+	return nil
 }

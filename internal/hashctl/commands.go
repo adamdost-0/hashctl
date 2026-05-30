@@ -380,12 +380,14 @@ func (a *app) runManifest(ctx context.Context, client *Client, cfg Config, args 
 		fs := flag.NewFlagSet("manifest get", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		var outputFile string
+		var includeManifestXML bool
 		fs.StringVar(&outputFile, "output-file", "", "write manifest XML to file")
+		fs.BoolVar(&includeManifestXML, "include-manifest-xml", false, "include raw manifest XML in JSON output")
 		if err := fs.Parse(args[1:]); err != nil {
 			return nil, err
 		}
 		if fs.NArg() != 1 {
-			return nil, fmt.Errorf("usage: hashctl manifest get [--output-file path] <job_id>")
+			return nil, fmt.Errorf("usage: hashctl manifest get [--output-file path] [--include-manifest-xml] <job_id>")
 		}
 		if cfg.Output != "json" && outputFile == "" {
 			return nil, fmt.Errorf("--output-file is required in human mode; use --output json for API response")
@@ -395,7 +397,7 @@ func (a *app) runManifest(ctx context.Context, client *Client, cfg Config, args 
 			return nil, err
 		}
 		if cfg.Output == "json" {
-			return manifest, nil
+			return manifestJSONOutput(manifest, includeManifestXML), nil
 		}
 		if err := os.WriteFile(outputFile, []byte(manifest.ManifestXML), 0o600); err != nil {
 			return nil, fmt.Errorf("write manifest file: %w", err)
@@ -404,6 +406,21 @@ func (a *app) runManifest(ctx context.Context, client *Client, cfg Config, args 
 		return nil, err
 	default:
 		return nil, fmt.Errorf("unknown manifest subcommand %q", args[0])
+	}
+}
+
+func manifestJSONOutput(manifest ManifestResponse, includeManifestXML bool) any {
+	if includeManifestXML {
+		return manifest
+	}
+	return struct {
+		JobID              string `json:"job_id"`
+		Status             string `json:"status"`
+		ManifestXMLOmitted bool   `json:"manifest_xml_omitted"`
+	}{
+		JobID:              manifest.JobID,
+		Status:             manifest.Status,
+		ManifestXMLOmitted: true,
 	}
 }
 

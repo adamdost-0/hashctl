@@ -134,7 +134,9 @@ func (c *Client) do(ctx context.Context, method string, path string, body any, o
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
-	c.applyHeaders(req)
+	if err := c.applyHeaders(req); err != nil {
+		return err
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -165,7 +167,7 @@ func (c *Client) join(path string) string {
 	return base.String()
 }
 
-func (c *Client) applyHeaders(req *http.Request) {
+func (c *Client) applyHeaders(req *http.Request) error {
 	if c.config.CorrelationID != "" {
 		req.Header.Set("x-correlation-id", c.config.CorrelationID)
 	}
@@ -179,8 +181,12 @@ func (c *Client) applyHeaders(req *http.Request) {
 		req.Header.Set("x-hash-engine-local-app-roles", strings.Join(c.config.LocalAppRoles, ","))
 	}
 	if c.config.BearerToken != "" {
+		if c.baseURL.Scheme == "http" && !isLoopbackHost(c.baseURL.Hostname()) {
+			return fmt.Errorf("refusing to send bearer token over non-loopback plaintext http; use https")
+		}
 		req.Header.Set("Authorization", "Bearer "+c.config.BearerToken)
 	}
+	return nil
 }
 
 type TransportError struct {
@@ -202,10 +208,14 @@ type APIError struct {
 }
 
 func (e APIError) Error() string {
+	summary := fmt.Sprintf("API request failed with status %d", e.HTTPStatus)
 	if e.ErrorCode != "" {
-		return e.ErrorCode + ": " + e.Message
+		summary += " (" + e.ErrorCode + ")"
 	}
-	return e.Message
+	if e.Message != "" {
+		summary += ": " + e.Message
+	}
+	return summary
 }
 
 type PollError struct {
@@ -222,34 +232,27 @@ func (e PollError) Error() string {
 }
 
 func parseAPIError(status int, route string, data []byte) APIError {
-	errOut := APIError{HTTPStatus: status, Route: route, Message: strings.TrimSpace(string(data))}
+	errOut := APIError{
+		HTTPStatus: status,
+		Route:      route,
+		Message:    fmt.Sprintf("request failed (%s)", http.StatusText(status)),
+	}
 	var envelope struct {
 		Detail json.RawMessage `json:"detail"`
 	}
 	if json.Unmarshal(data, &envelope) != nil || len(envelope.Detail) == 0 {
-		if errOut.Message == "" {
-			errOut.Message = http.StatusText(status)
-		}
 		return errOut
 	}
 	var detailObj struct {
 		ErrorCode     string `json:"error_code"`
-		Message       string `json:"message"`
 		JobID         string `json:"job_id"`
 		CorrelationID string `json:"correlation_id"`
 	}
-	if json.Unmarshal(envelope.Detail, &detailObj) == nil && (detailObj.Message != "" || detailObj.ErrorCode != "") {
+	if json.Unmarshal(envelope.Detail, &detailObj) == nil {
 		errOut.ErrorCode = detailObj.ErrorCode
-		errOut.Message = detailObj.Message
 		errOut.JobID = detailObj.JobID
 		errOut.CorrelationID = detailObj.CorrelationID
 		return errOut
 	}
-	var detailString string
-	if json.Unmarshal(envelope.Detail, &detailString) == nil && detailString != "" {
-		errOut.Message = detailString
-		return errOut
-	}
-	errOut.Message = strings.TrimSpace(string(envelope.Detail))
 	return errOut
 }

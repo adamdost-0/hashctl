@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
+	"strings"
 )
 
 func writeJSON(w io.Writer, value any) error {
@@ -111,7 +113,14 @@ func writeError(w io.Writer, output string, err error) {
 		payload := map[string]any{"error": map[string]any{"message": redact(err.Error())}}
 		switch e := err.(type) {
 		case APIError:
-			payload["error"] = e
+			payload["error"] = map[string]any{
+				"http_status":    e.HTTPStatus,
+				"error_code":     e.ErrorCode,
+				"message":        redact(e.Message),
+				"route":          e.Route,
+				"job_id":         e.JobID,
+				"correlation_id": e.CorrelationID,
+			}
 		case TransportError:
 			payload["error"] = map[string]any{"message": redact(e.Err.Error()), "route": e.Route}
 		case PollError:
@@ -132,5 +141,58 @@ func redact(value string) string {
 	if value == "" {
 		return value
 	}
-	return value
+	redacted := value
+	for _, pattern := range redactionPatterns {
+		redacted = pattern.ReplaceAllString(redacted, "$1[REDACTED]")
+	}
+	redacted = querySecretPattern.ReplaceAllStringFunc(redacted, func(match string) string {
+		parts := strings.SplitN(match, "=", 2)
+		return parts[0] + "=[REDACTED]"
+	})
+	redacted = jwtPattern.ReplaceAllString(redacted, "[REDACTED_JWT]")
+	redacted = highEntropyPattern.ReplaceAllStringFunc(redacted, func(token string) string {
+		if looksSensitiveToken(token) {
+			return "[REDACTED_SECRET]"
+		}
+		return token
+	})
+	return redacted
+}
+
+var (
+	redactionPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(authorization\s*[:=]\s*bearer\s+)[^\s",;]+`),
+		regexp.MustCompile(`(?i)(bearer\s+)[A-Za-z0-9\-._~+/]+=*`),
+		regexp.MustCompile(`(?i)(sharedaccesssignature=)[^;\s]+`),
+		regexp.MustCompile(`(?i)(accountkey=)[^;\s]+`),
+		regexp.MustCompile(`(?i)((?:clientsecret|password|pwd|secret)\s*[:=]\s*)[^;\s",]+`),
+	}
+	querySecretPattern = regexp.MustCompile(`(?i)[?&](sig|signature|token|access_token|se|sp|sv|spr|sr|skoid|sktid|skt|ske|sks|skv)=[^&\s]+`)
+	jwtPattern         = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`)
+	highEntropyPattern = regexp.MustCompile(`\b[A-Za-z0-9+/_=-]{32,}\b`)
+)
+
+func looksSensitiveToken(value string) bool {
+	var hasUpper bool
+	var hasLower bool
+	var hasDigit bool
+	var hasSpecial bool
+	for _, r := range value {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		case strings.ContainsRune("+/_-=", r):
+			hasSpecial = true
+		default:
+			return false
+		}
+	}
+	if len(value) >= 48 && hasLower && hasDigit {
+		return true
+	}
+	return len(value) >= 40 && hasUpper && hasLower && hasDigit && hasSpecial
 }
