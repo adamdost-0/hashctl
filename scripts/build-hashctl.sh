@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+rm -rf bin
 mkdir -p bin
 version="${HASHCTL_VERSION:-dev}"
 ldflags="-X github.com/adamdost-0/hash-engine/internal/hashctl.Version=${version}"

@@ -1,6 +1,7 @@
 name: Build hashctl
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -23,6 +24,8 @@ jobs:
           python-version: "3.11"
       - name: Install Python test dependencies
         run: python -m pip install -e ".[dev]"
+      - name: Clean stale build outputs
+        run: rm -rf bin artifacts/hashctl
       - run: GOPROXY=off GOSUMDB=off go test ./...
       - name: Run hashctl ↔ FastAPI contract harness
         run: ./scripts/test-hashctl-contract.sh
@@ -43,6 +46,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Clean stale build outputs
+        run: rm -rf bin artifacts/hashctl
       - name: Read version
         id: version
         run: |
