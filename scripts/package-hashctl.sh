@@ -8,7 +8,7 @@ artifact_dir="artifacts/hashctl"
 rm -rf "${artifact_dir}"
 package_name="hashctl-${version}-${os_name}-${arch_name}"
 archive_name="${package_name}.tar.gz"
-ldflags="-X github.com/adamdost-0/hash-engine/internal/hashctl.Version=${version}"
+ldflags="-X github.com/adamdost-0/hashctl/internal/hashctl.Version=${version}"
 
 mkdir -p "${artifact_dir}/${package_name}"
 GOPROXY=off GOSUMDB=off go build -ldflags "${ldflags}" -o "${artifact_dir}/${package_name}/hashctl" ./cmd/hashctl

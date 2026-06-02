@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="${HASHCTL_REPO:-adamdost-0/hash-engine}"
+repo="${HASHCTL_REPO:-adamdost-0/hashctl}"
 version="${HASHCTL_VERSION:-$("${script_dir}/get-hashctl-version.sh")}"
 platform="${HASHCTL_PLATFORM:-linux-amd64}"
 install_dir="${HASHCTL_INSTALL_DIR:-/usr/local/bin}"

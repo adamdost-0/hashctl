@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/adamdost-0/hash-engine/internal/hashctl"
+	"github.com/adamdost-0/hashctl/internal/hashctl"
 )
 
 func main() {

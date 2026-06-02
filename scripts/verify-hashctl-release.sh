@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 version="${HASHCTL_VERSION:-$(${script_dir}/get-hashctl-version.sh)}"
 platform="${HASHCTL_PLATFORM:-}"
 release_tag="${HASHCTL_RELEASE_TAG:-v${version}}"
-repo="${HASHCTL_REPO:-adamdost-0/hash-engine}"
+repo="${HASHCTL_REPO:-adamdost-0/hashctl}"
 download_dir="${HASHCTL_DOWNLOAD_DIR:-}"
 
 if [[ -z "${platform}" ]]; then
