@@ -91,7 +91,7 @@ jobs:
           ls -la "$artifact" "$artifact.sha256"
           (cd artifacts/hashctl && shasum -a 256 -c "$(basename "$artifact").sha256")
       - name: Upload to release
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -113,7 +113,7 @@ jobs:
           gh release upload "$TAG" "$artifact" "$checksum" --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Verify release asset download
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HASHCTL_VERSION: ${{ steps.version.outputs.version }}
