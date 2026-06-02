@@ -21,11 +21,37 @@ jobs:
           go-version-file: go.mod
       - name: Clean stale build outputs
         run: rm -rf bin artifacts/hashctl
-      - run: GOPROXY=off GOSUMDB=off go test ./...
-      - run: GOPROXY=off GOSUMDB=off go vet ./...
+      - name: Run tests
+        run: ./scripts/test-hashctl.sh
+      - name: Run vet
+        run: CGO_ENABLED=0 GOPROXY=off GOSUMDB=off go vet ./...
+      - name: Run lint (gofmt)
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "Unformatted files:"
+            echo "$fmt_out"
+            exit 1
+          fi
+      - name: Run standalone build
+        run: HASHCTL_VERSION=ci ./scripts/build-hashctl.sh
+
+  credential-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks credential scan (connected-side CI control)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
 
   build:
-    needs: test
+    needs:
+      - test
+      - credential-scan
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

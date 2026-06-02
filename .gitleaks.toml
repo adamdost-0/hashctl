@@ -1,0 +1,15 @@
+title = "hashctl gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow deterministic secret-like literals in redaction unit tests"
+paths = [
+  '''internal/hashctl/output_test\.go''',
+]
+regexTarget = "line"
+regexes = [
+  '''AccountKey=abc123SECRET==''',
+  '''secret=AbCdEf0123456789AbCdEf0123456789AbCdEf01''',
+]
