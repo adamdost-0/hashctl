@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Hardened `redact()` high-entropy token detection to catch delimiter-edge padded base64 and
+  32+ character opaque secrets (including dot/colon-delimited forms) while avoiding common
+  non-secret identifiers; added adversarial tests for issue [#4](https://github.com/adamdost-0/hashctl/issues/4).
+
 ### Added
 
 - `LICENSE` (MIT), `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`,

@@ -12,4 +12,9 @@ regexTarget = "line"
 regexes = [
   '''AccountKey=abc123SECRET==''',
   '''secret=AbCdEf0123456789AbCdEf0123456789AbCdEf01''',
+  '''RkFLRV9TRUNSRVRfVE9LRU5fSVNTVUVfRk9VUl9YWA==''',
+  '''0123456789abcdef0123456789abcdef''',
+  '''FakeBase62Token0123456789abcdefXYZ123''',
+  '''fake\.segment\.token\.0123456789abcdef\.ABCDEF''',
+  '''AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00''',
 ]

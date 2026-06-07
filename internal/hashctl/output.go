@@ -150,12 +150,7 @@ func redact(value string) string {
 		return parts[0] + "=[REDACTED]"
 	})
 	redacted = jwtPattern.ReplaceAllString(redacted, "[REDACTED_JWT]")
-	redacted = highEntropyPattern.ReplaceAllStringFunc(redacted, func(token string) string {
-		if looksSensitiveToken(token) {
-			return "[REDACTED_SECRET]"
-		}
-		return token
-	})
+	redacted = redactHighEntropyTokens(redacted)
 	return redacted
 }
 
@@ -169,30 +164,83 @@ var (
 	}
 	querySecretPattern = regexp.MustCompile(`(?i)[?&](sig|signature|token|access_token|se|sp|sv|spr|sr|skoid|sktid|skt|ske|sks|skv)=[^&\s]+`)
 	jwtPattern         = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`)
-	highEntropyPattern = regexp.MustCompile(`\b[A-Za-z0-9+/_=-]{32,}\b`)
+	highEntropyPattern = regexp.MustCompile("(^|[\\s\"'`,;>([{|@])([A-Za-z0-9+/_=.:-]{32,})")
+	uuidPattern        = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
 func looksSensitiveToken(value string) bool {
+	if len(value) < 32 || uuidPattern.MatchString(value) || looksPathLike(value) {
+		return false
+	}
+	if strings.Contains(value, "=") && strings.Contains(value, "/") && strings.Contains(value, ".") {
+		return false
+	}
 	var hasUpper bool
 	var hasLower bool
 	var hasDigit bool
 	var hasSpecial bool
+	var hexOnly = true
+	var coreLen int
 	for _, r := range value {
 		switch {
 		case r >= 'A' && r <= 'Z':
 			hasUpper = true
+			coreLen++
+			hexOnly = hexOnly && ((r >= 'A' && r <= 'F') || (r >= 'a' && r <= 'f'))
 		case r >= 'a' && r <= 'z':
 			hasLower = true
+			coreLen++
+			hexOnly = hexOnly && ((r >= 'A' && r <= 'F') || (r >= 'a' && r <= 'f'))
 		case r >= '0' && r <= '9':
 			hasDigit = true
-		case strings.ContainsRune("+/_-=", r):
+			coreLen++
+		case strings.ContainsRune("+/_-=.:", r):
 			hasSpecial = true
 		default:
 			return false
 		}
 	}
-	if len(value) >= 48 && hasLower && hasDigit {
+	if coreLen < 32 {
+		return false
+	}
+	if hexOnly && coreLen >= 32 {
 		return true
 	}
-	return len(value) >= 40 && hasUpper && hasLower && hasDigit && hasSpecial
+	if hasDigit && (hasUpper || hasLower) {
+		return true
+	}
+	return hasSpecial && hasUpper && hasLower
+}
+
+func redactHighEntropyTokens(value string) string {
+	matches := highEntropyPattern.FindAllStringSubmatchIndex(value, -1)
+	if len(matches) == 0 {
+		return value
+	}
+	var b strings.Builder
+	last := 0
+	for _, m := range matches {
+		matchStart, matchEnd := m[0], m[1]
+		prefixStart, prefixEnd := m[2], m[3]
+		tokenStart, tokenEnd := m[4], m[5]
+		b.WriteString(value[last:matchStart])
+		prefix := value[prefixStart:prefixEnd]
+		token := value[tokenStart:tokenEnd]
+		b.WriteString(prefix)
+		if looksSensitiveToken(token) {
+			b.WriteString("[REDACTED_SECRET]")
+		} else {
+			b.WriteString(token)
+		}
+		last = matchEnd
+	}
+	b.WriteString(value[last:])
+	return b.String()
+}
+
+func looksPathLike(value string) bool {
+	if strings.Count(value, "/") < 2 || !strings.Contains(value, ".") {
+		return false
+	}
+	return !strings.ContainsAny(value, "+=:")
 }
