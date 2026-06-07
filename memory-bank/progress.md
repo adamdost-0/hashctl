@@ -15,6 +15,9 @@
   dependency-review, and Scorecard workflows (validated with `actionlint`).
 - **Release:** GoReleaser config validated locally with `goreleaser check` and a full
   `--snapshot` build; artifacts remain compatible with the install/verify scripts.
+- **Security assessment tooling:** `scripts/security-assessment.sh` (offline, stdlib-only
+  evidence collector), the `security-assessment` skill, and its prompt drive a repeatable
+  cross-vendor multi-model review synthesized into GitHub issues.
 
 ## What's left
 
@@ -25,6 +28,10 @@
 
 ## Known issues / notes
 
+- **Open security issues #3–#8 (multi-model assessment).** Most important: **#3 (Critical)** —
+  success output and `manifest get` file writes bypass `redact()` (only the error path
+  redacts), violating ADR-0003. Also #4 (redact heuristic gaps), #5 (literal `--bearer-token`
+  accepted after a subcommand), #6 (`https→http` redirect can leak the bearer token).
 - `.github/COMPENSATING_CONTROLS.md` is stale (branch protection is active); update or retire.
 - `JobRecord.Raw` is currently unused in serialization paths.
 - Tests for `smoke single-job` and some `config.go` paths are only covered indirectly.
