@@ -228,11 +228,11 @@ var (
 	redactionPatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)(authorization\s*[:=]\s*bearer\s+)[^\s",;]+`),
 		regexp.MustCompile(`(?i)(bearer\s+)[A-Za-z0-9\-._~+/]+=*`),
-		regexp.MustCompile(`(?i)(sharedaccesssignature=)[^;\s]+`),
-		regexp.MustCompile(`(?i)(accountkey=)[^;\s]+`),
-		regexp.MustCompile(`(?i)((?:clientsecret|password|pwd|secret)\s*[:=]\s*)[^;\s",]+`),
+		regexp.MustCompile(`(?i)(sharedaccesssignature=)[^;\s"'<>]+`),
+		regexp.MustCompile(`(?i)(accountkey=)[^;\s"'<>]+`),
+		regexp.MustCompile(`(?i)((?:clientsecret|password|pwd|secret)\s*[:=]\s*)[^;\s",'<>]+`),
 	}
-	querySecretPattern = regexp.MustCompile(`(?i)[?&](sig|signature|token|access_token|se|sp|sv|spr|sr|skoid|sktid|skt|ske|sks|skv)=[^&\s]+`)
+	querySecretPattern = regexp.MustCompile(`(?i)[?&](sig|signature|token|access_token|se|sp|sv|spr|sr|skoid|sktid|skt|ske|sks|skv)=[^&\s"'<>]+`)
 	jwtPattern         = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`)
 	highEntropyPattern = regexp.MustCompile(`\b[A-Za-z0-9+/_=-]{32,}\b`)
 )

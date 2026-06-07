@@ -1,7 +1,10 @@
 package hashctl
 
 import (
+	"bytes"
 	"encoding/json"
+	xmlpkg "encoding/xml"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -103,13 +106,15 @@ func TestManifestIncludeXMLJSONRedactsSecrets(t *testing.T) {
 }
 
 func TestManifestOutputFileContentsAreRedacted(t *testing.T) {
-	xml := "<Manifest><Blob href=\"" + fakeSASURL + "\"/><Cred>" + fakeAccountKey + "</Cred><Token>" + fakeJWT + "</Token></Manifest>"
+	// Well-formed XML manifest (the SAS '&' is XML-escaped as &amp;). Redaction
+	// must replace the secret values without breaking well-formedness.
+	manifestXML := "<Manifest><Blob href=\"https://acct.blob.core.windows.net/c/b?sig=ZmFrZXNpZw%3D%3D&amp;se=2030-01-01\"/><Cred>" + fakeAccountKey + "</Cred><Token>" + fakeJWT + "</Token></Manifest>"
 	outputPath := filepath.Join(t.TempDir(), "manifest.xml")
 	code, _, stderr := runTest(
 		[]string{"manifest", "get", "--output-file", outputPath, "job-1"},
 		nil,
 		func(w http.ResponseWriter, r *http.Request) {
-			writeJSONResponse(t, w, http.StatusOK, ManifestResponse{JobID: "job-1", Status: "complete", ManifestXML: xml})
+			writeJSONResponse(t, w, http.StatusOK, ManifestResponse{JobID: "job-1", Status: "complete", ManifestXML: manifestXML})
 		},
 	)
 	if code != ExitSuccess {
@@ -120,6 +125,21 @@ func TestManifestOutputFileContentsAreRedacted(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertNoLeak(t, "manifest --output-file contents", string(data))
+
+	// The redacted manifest must remain well-formed XML. A naive whole-string
+	// redact() consumes the closing quote/angle bracket of sig=/AccountKey=
+	// values inside attributes and tags, corrupting the document (issue #3
+	// cross-vendor review). Verify the saved file still parses.
+	decoder := xmlpkg.NewDecoder(bytes.NewReader(data))
+	for {
+		_, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("redacted manifest --output-file is not well-formed XML: %v\n%s", err, data)
+		}
+	}
 
 	info, err := os.Stat(outputPath)
 	if err != nil {
