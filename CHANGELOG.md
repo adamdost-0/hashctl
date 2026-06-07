@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install-hashctl.sh` and `verify-hashctl-release.sh` verify checksums in a
   format-agnostic way, compatible with GoReleaser's per-file `.sha256` sidecars.
 
+### Fixed
+
+- `build-hashctl.yml` now uploads the packaged per-platform binary (and its checksum) as a
+  downloadable workflow artifact. The build job previously built and verified the tarball
+  but discarded it, so no binary was retrievable from CI runs.
+
 ## [0.1.0] - 2026-06-02
 
 ### Added
