@@ -13,3 +13,15 @@ regexes = [
   '''AccountKey=abc123SECRET==''',
   '''secret=AbCdEf0123456789AbCdEf0123456789AbCdEf01''',
 ]
+
+[[allowlists]]
+description = "Allow obviously-fake credential fixtures in success-output redaction tests (issue #3)"
+paths = [
+  '''internal/hashctl/redaction_test\.go''',
+]
+regexTarget = "line"
+regexes = [
+  '''ZmFrZXNpZw''',
+  '''ZmFrZWtleQ''',
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9''',
+]

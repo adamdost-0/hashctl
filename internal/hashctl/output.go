@@ -1,6 +1,7 @@
 package hashctl
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,10 +9,74 @@ import (
 	"strings"
 )
 
+// writeJSON is the single choke point for all JSON output. It serializes value,
+// scrubs every string literal through redact(), and writes the result in one
+// call. Routing all JSON (success results and error payloads) through here makes
+// credential redaction impossible to forget when a new output path is added
+// (ADR-0003).
 func writeJSON(w io.Writer, value any) error {
-	enc := json.NewEncoder(w)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
-	return enc.Encode(value)
+	if err := enc.Encode(value); err != nil {
+		return err
+	}
+	_, err := w.Write(redactJSONBytes(buf.Bytes()))
+	return err
+}
+
+// redactJSONBytes rewrites a serialized JSON document, replacing the contents of
+// every string literal with its redact()-scrubbed form. Each literal is decoded
+// to plaintext, redacted, then re-encoded, so structure, key order, numbers, and
+// escaping are preserved and the output is always valid JSON. This is required
+// because applying redact() to the whole serialized document lets greedy patterns
+// (Azure SAS query parameters, AccountKey=, ...) consume the closing quote of a
+// value and corrupt the JSON.
+func redactJSONBytes(data []byte) []byte {
+	var out bytes.Buffer
+	out.Grow(len(data))
+	for i := 0; i < len(data); {
+		if data[i] != '"' {
+			out.WriteByte(data[i])
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(data) {
+			if data[j] == '\\' {
+				j += 2
+				continue
+			}
+			if data[j] == '"' {
+				break
+			}
+			j++
+		}
+		if j >= len(data) {
+			out.Write(data[i:])
+			break
+		}
+		literal := data[i : j+1]
+		var decoded string
+		if err := json.Unmarshal(literal, &decoded); err != nil {
+			out.Write(literal)
+		} else if scrubbed, err := json.Marshal(redact(decoded)); err != nil {
+			out.Write(literal)
+		} else {
+			out.Write(scrubbed)
+		}
+		i = j + 1
+	}
+	return out.Bytes()
+}
+
+// writeRedactedText is the single choke point for free-form text output. It
+// scrubs the complete rendered string through redact() and writes it in one
+// call, so a secret can never be split across multiple writes (which could let a
+// token straddle a chunk boundary and escape redaction).
+func writeRedactedText(w io.Writer, text string) error {
+	_, err := io.WriteString(w, redact(text))
+	return err
 }
 
 func writeJobSummary(w io.Writer, job JobRecord) error {
@@ -115,20 +180,20 @@ func writeError(w io.Writer, output string, err error) {
 		case APIError:
 			payload["error"] = map[string]any{
 				"http_status":    e.HTTPStatus,
-				"error_code":     e.ErrorCode,
+				"error_code":     redact(e.ErrorCode),
 				"message":        redact(e.Message),
-				"route":          e.Route,
-				"job_id":         e.JobID,
-				"correlation_id": e.CorrelationID,
+				"route":          redact(e.Route),
+				"job_id":         redact(e.JobID),
+				"correlation_id": redact(e.CorrelationID),
 			}
 		case TransportError:
-			payload["error"] = map[string]any{"message": redact(e.Err.Error()), "route": e.Route}
+			payload["error"] = map[string]any{"message": redact(e.Err.Error()), "route": redact(e.Route)}
 		case PollError:
 			payload["error"] = map[string]any{
 				"message":      redact(e.Error()),
-				"job_id":       e.Job.JobID,
-				"target_state": e.TargetState,
-				"final_state":  e.Job.Status,
+				"job_id":       redact(e.Job.JobID),
+				"target_state": redact(e.TargetState),
+				"final_state":  redact(e.Job.Status),
 			}
 		}
 		_ = writeJSON(w, payload)

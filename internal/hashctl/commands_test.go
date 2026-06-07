@@ -282,7 +282,7 @@ func TestManifestGetWritesXMLWhenOutputFileSupplied(t *testing.T) {
 	if code != ExitSuccess {
 		t.Fatalf("code=%d stderr=%s", code, stderr)
 	}
-	if !strings.Contains(stdout, "wrote manifest job-1 to "+outputPath) {
+	if !strings.Contains(stdout, "wrote manifest job-1 to "+redact(outputPath)) {
 		t.Fatalf("stdout = %q", stdout)
 	}
 	data, err := os.ReadFile(outputPath)

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Route **all** user-facing success output and the `manifest get --output-file`
+  write through the `redact()` choke point, fixing an ADR-0003 redaction gap
+  (issue #3) where a malicious or compromised API — or a manifest embedding SAS
+  blob URLs — could leak credentials (SAS tokens, `AccountKey=`, JWTs) to stdout,
+  CI logs, and files. JSON output is now scrubbed with a structure-preserving
+  redactor that decodes each string literal before redacting, so the document
+  stays valid JSON; human and direct-print output is buffered and redacted in a
+  single write so no token can straddle a write boundary; manifest XML is
+  redacted before `os.WriteFile` (mode `0o600` preserved); and the JSON error
+  payload now redacts `error_code`, `route`, `job_id`, and `correlation_id`.
+
 ### Added
 
 - `LICENSE` (MIT), `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`,
