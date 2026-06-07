@@ -27,8 +27,19 @@ architecture-driven design, and governance).
   populated `/memory-bank/`, four agent skills, two prompt files, and
   `copilot-setup-steps.yml`.
 
+## Security assessment (branch `security-assessment-tooling`)
+
+- Ran a **multi-model security assessment** (8 parallel sub-agents across 3 vendors —
+  Anthropic/OpenAI/Google — synthesized by a primary model). 19 findings → GitHub issues
+  **#3–#9** (#9 tracks). Headline (**#3, Critical**): ADR-0003 redaction is enforced only on
+  the error path — **success output and `manifest get` file writes are unredacted**.
+- Added reusable tooling: `security-assessment` skill + prompt and
+  `scripts/security-assessment.sh` (offline, stdlib-only evidence collector). No Go deps.
+
 ## Next steps / active decisions
 
+- **Remediate the assessment findings**, starting with #3 (route all output through a
+  redaction choke point), then #4–#7; triage the #8 roll-up.
 - Enforce the `main` ruleset: required PR review + CODEOWNERS + signed commits + linear
   history (a GitHub settings change, not a file). Retire/refresh `.github/COMPENSATING_CONTROLS.md`.
 - Cut the first release tag `v0.1.0` once the branch merges.
