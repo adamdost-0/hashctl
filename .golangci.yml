@@ -1,0 +1,52 @@
+# golangci-lint v2 configuration for hashctl.
+# Docs: https://golangci-lint.run/
+version: "2"
+
+run:
+  # The project is stdlib-only; never modify go.sum during a lint run.
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    - bodyclose # HTTP response bodies must be closed (resource leaks)
+    - depguard # enforce the stdlib-only import policy (ADR-0001)
+    - errcheck # unchecked errors
+    - gosec # security analyzer (G1xx-G7xx)
+    - govet # mirrors `go vet ./...`
+    - ineffassign # ineffectual assignments
+    - misspell # typos in comments/strings
+    - staticcheck # SA/ST analysis suite
+    - unused # unused code
+  settings:
+    depguard:
+      rules:
+        stdlib-only:
+          # Allowlist mode: deny every import that is not explicitly permitted.
+          list-mode: strict
+          allow:
+            - $gostd # all Go standard library packages
+            - github.com/adamdost-0/hashctl # this module (cmd/ -> internal/)
+  exclusions:
+    generated: lax
+    rules:
+      # Relax unchecked-error reporting in tests.
+      - path: _test\.go
+        linters:
+          - errcheck
+      # Tests deliberately read temp paths and write a 0644 token file to exercise
+      # the permission-rejection logic.
+      - path: _test\.go
+        linters:
+          - gosec
+      # G304: hashctl legitimately reads operator-specified file paths (config file,
+      # --bearer-token-file, --blob-list-file). These paths are local operator input,
+      # not untrusted network data.
+      - path: (config|commands)\.go
+        linters:
+          - gosec
+        text: G304
+
+formatters:
+  enable:
+    - gofmt
