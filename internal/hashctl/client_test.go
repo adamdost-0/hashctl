@@ -78,10 +78,13 @@ func TestLoopbackHTTPWithBearerTokenIsAllowed(t *testing.T) {
 // TestHTTPSToHTTPRedirectRefusedBearerTokenNotLeaked verifies that a 3xx redirect
 // from an HTTPS server to a plaintext HTTP endpoint is refused by secureCheckRedirect,
 // and that the "attacker" HTTP endpoint never receives the Authorization header.
-func TestHTTPSToHTTPRedirectRefusedBearerTokenNotLeaked(t *testing.T) {
-	// Attacker server: plain HTTP.  Records any Authorization header it sees.
+func TestRedirectHTTPSToHTTPRefusedBearerTokenNotLeaked(t *testing.T) {
+	// Attacker server: plain HTTP.  Records any Authorization header it sees and
+	// how many times it is hit.
 	var attackerGotAuth string
+	var attackerHits int
 	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attackerHits++
 		attackerGotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -113,7 +116,11 @@ func TestHTTPSToHTTPRedirectRefusedBearerTokenNotLeaked(t *testing.T) {
 		t.Fatal("expected error: redirect from https to http should be refused, got nil")
 	}
 
-	// The attacker endpoint must never have received the Authorization header.
+	// The attacker endpoint must never have been reached at all, and never have
+	// received the Authorization header.
+	if attackerHits != 0 {
+		t.Fatalf("attacker endpoint was reached %d time(s); the downgraded request must not be sent", attackerHits)
+	}
 	if attackerGotAuth != "" {
 		t.Fatalf("bearer token leaked to attacker: Authorization = %q", attackerGotAuth)
 	}
@@ -121,7 +128,7 @@ func TestHTTPSToHTTPRedirectRefusedBearerTokenNotLeaked(t *testing.T) {
 
 // TestLoopbackHTTPRedirectAllowed verifies that a same-scheme redirect within a
 // loopback HTTP server (no downgrade) is still followed normally.
-func TestLoopbackHTTPRedirectAllowed(t *testing.T) {
+func TestRedirectLoopbackHTTPAllowed(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/original", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/redirected", http.StatusFound)
