@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Copilot cloud-agent environment.
 - Copilot agent skills (`go-validation-gate`, `code-review`, `security-review`,
   `release-notes-writer`) and prompt files (`generate-go-tests`, `update-godoc`).
+- Populated the Copilot Memory Bank (`memory-bank/` core files: projectbrief,
+  productContext, systemPatterns, techContext, activeContext, progress, copilot-rules)
+  and integrated hashctl project instructions into `.github/copilot-instructions.md`
+  alongside the Memory Bank framework.
 
 ### Changed
 
