@@ -233,7 +233,7 @@ func parseGlobal(args []string) (Config, []string, error) {
 func rejectLiteralBearerToken(args []string) error {
 	for _, arg := range args {
 		name, _, ok := flagName(arg)
-		if ok && name == "bearer-token" {
+		if ok && strings.EqualFold(name, "bearer-token") {
 			return fmt.Errorf(literalBearerTokenError)
 		}
 	}

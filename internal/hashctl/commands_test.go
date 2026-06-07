@@ -563,6 +563,8 @@ func TestLiteralBearerTokenFlagAfterSubcommandIsRejected(t *testing.T) {
 		args []string
 	}{
 		{name: "job get inline", args: []string{"job", "get", "--bearer-token=x"}},
+		{name: "job get mixed case", args: []string{"job", "get", "--Bearer-Token=x"}},
+		{name: "job get upper single dash", args: []string{"job", "get", "-BEARER-TOKEN=x"}},
 		{name: "job cancel inline", args: []string{"job", "cancel", "--bearer-token=x"}},
 		{name: "manifest build inline", args: []string{"manifest", "build", "--bearer-token=x"}},
 		{name: "sign first inline", args: []string{"sign", "first", "--bearer-token=x"}},
