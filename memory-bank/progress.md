@@ -10,6 +10,7 @@
 - **Security in code:** literal-token rejection, `chmod 600` token files, HTTPS enforcement,
   redaction — all test-covered.
 - **Validation gate:** test → vet → gofmt → build all pass; `golangci-lint` reports 0 issues.
+- **Toolchain:** builds on supported `go 1.25.0` (replaced end-of-life 1.19).
 - **CI:** build/test/lint, gitleaks, cross-platform packaging; new CodeQL, govulncheck,
   dependency-review, and Scorecard workflows (validated with `actionlint`).
 - **Release:** GoReleaser config validated locally with `goreleaser check` and a full
@@ -17,7 +18,6 @@
 
 ## What's left
 
-- Bump `go.mod` off the end-of-life `go 1.19` (see `activeContext.md`).
 - Enforce the `main` branch ruleset (required reviews, signed commits, linear history).
 - Publish the first release (`v0.1.0`) after merge.
 - Optional: SBOM attachment, fuzz tests, full Diátaxis `docs/` tree, broader test coverage

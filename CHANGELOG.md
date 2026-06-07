@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bumped the minimum Go version from `1.19` (end-of-life) to `1.25.0` (supported).
 - Hardened `build-hashctl.yml`: least-privilege per-job permissions, SHA-pinned actions,
   and upgraded the gitleaks action to v3.
 - Decoupled release publishing from `build-hashctl.yml` (now handled by GoReleaser in

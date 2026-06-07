@@ -21,15 +21,14 @@ architecture-driven design, and governance).
   build-provenance attestation; decoupled release from `build-hashctl.yml`.
 - **Architecture-driven design:** 7 MADR ADRs + index, `docs/threat-model.md` (STRIDE),
   `doc.go` package docs.
+- **Bumped `go.mod` to `go 1.25.0`** (supported), replacing end-of-life `go 1.19`; validated
+  with go1.25.11 (the toolchain CI's setup-go installs).
 - **Copilot:** preserved the Memory Bank framework, added project instructions, this
   populated `/memory-bank/`, four agent skills, two prompt files, and
   `copilot-setup-steps.yml`.
 
 ## Next steps / active decisions
 
-- **Pending: bump `go.mod`** from `1.19` (end-of-life) to a supported release. Deferred
-  because the local toolchain is 1.22 with `GOPROXY=off`, so a newer version can't be
-  validated offline here. Decide the target version and validate in CI.
 - Enforce the `main` ruleset: required PR review + CODEOWNERS + signed commits + linear
   history (a GitHub settings change, not a file). Retire/refresh `.github/COMPENSATING_CONTROLS.md`.
 - Cut the first release tag `v0.1.0` once the branch merges.

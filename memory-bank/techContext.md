@@ -4,8 +4,8 @@
 
 ## Language & dependencies
 
-- **Go**, version pinned by `go.mod` (currently `go 1.19`; a bump to a supported release is
-  a pending decision — see `activeContext.md`). CI resolves it via `go-version-file: go.mod`.
+- **Go**, version pinned by `go.mod` (`go 1.25.0`; supported, not end-of-life). CI resolves
+  it via `go-version-file: go.mod` (setup-go installs the latest 1.25.x).
 - **Zero third-party dependencies** — standard library only, no `go.sum` (ADR-0001).
 - All Go commands run **offline**: `GOPROXY=off GOSUMDB=off`, `CGO_ENABLED=0`.
 
