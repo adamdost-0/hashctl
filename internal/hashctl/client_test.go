@@ -2,6 +2,7 @@ package hashctl
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,5 +73,71 @@ func TestLoopbackHTTPWithBearerTokenIsAllowed(t *testing.T) {
 	var out map[string]any
 	if err := client.do(context.Background(), http.MethodGet, "/health", nil, &out); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestWaitForJobSurfaces5xxOnDeadline verifies that persistent 5xx responses surface as
+// APIError (exit 5) rather than being masked as PollError (exit 6) when the deadline
+// expires. This covers ADR-0002 exit-code semantics.
+func TestWaitForJobSurfaces5xxOnDeadline(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"detail":{"error_code":"internal_error"}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		APIURL:       server.URL,
+		Timeout:      5 * time.Second,
+		PollInterval: 1 * time.Millisecond,
+		PollTimeout:  20 * time.Millisecond,
+	}, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.WaitForJob(context.Background(), "job-1", "complete")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var apiErr APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected APIError, got %T: %v", err, err)
+	}
+	if apiErr.HTTPStatus != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", apiErr.HTTPStatus)
+	}
+}
+
+// TestWaitForJobPollTimeoutWhenServerRespondsOK verifies that a job stuck in a
+// non-terminal state still returns PollError (exit 6) when the deadline expires
+// and the last poll succeeded.
+func TestWaitForJobPollTimeoutWhenServerRespondsOK(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"job_id":"job-1","status":"hashing","requestor_object_id":"r","cloud_name":"az","expected_blob_count":0,"created_at":"","updated_at":""}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		APIURL:       server.URL,
+		Timeout:      5 * time.Second,
+		PollInterval: 1 * time.Millisecond,
+		PollTimeout:  20 * time.Millisecond,
+	}, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.WaitForJob(context.Background(), "job-1", "complete")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var pollErr PollError
+	if !errors.As(err, &pollErr) {
+		t.Fatalf("expected PollError (exit 6), got %T: %v", err, err)
+	}
+	if pollErr.Terminal {
+		t.Fatal("expected non-terminal poll timeout")
 	}
 }

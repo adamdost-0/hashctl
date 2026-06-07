@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	blobListMaxBytes = 4 << 20 // 4 MiB
+	batchSizeMax     = 10000
+)
+
 type app struct {
 	stdout     io.Writer
 	stderr     io.Writer
@@ -331,6 +336,12 @@ func (a *app) runJobCreate(ctx context.Context, client *Client, args []string) (
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
+	var batchSizeProvided bool
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "batch-size" {
+			batchSizeProvided = true
+		}
+	})
 	if request.SourceAccount == "" || request.SourceContainer == "" {
 		return nil, fmt.Errorf("--source-account and --source-container are required")
 	}
@@ -342,8 +353,13 @@ func (a *app) runJobCreate(ctx context.Context, client *Client, args []string) (
 		}
 		request.BlobNames = append(request.BlobNames, fileBlobs...)
 	}
-	if request.BatchSize < 0 {
-		return nil, fmt.Errorf("--batch-size must be at least 1 when supplied")
+	if batchSizeProvided {
+		if request.BatchSize <= 0 {
+			return nil, fmt.Errorf("--batch-size must be at least 1 when supplied")
+		}
+		if request.BatchSize > batchSizeMax {
+			return nil, fmt.Errorf("--batch-size must not exceed %d when supplied", batchSizeMax)
+		}
 	}
 	if len(request.Metadata) == 0 {
 		request.Metadata = nil
@@ -352,9 +368,18 @@ func (a *app) runJobCreate(ctx context.Context, client *Client, args []string) (
 }
 
 func readBlobList(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("read blob list file: %w", err)
+	}
+	defer f.Close()
+	// Read one byte past the limit so we can detect truncation.
+	data, err := io.ReadAll(io.LimitReader(f, blobListMaxBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read blob list file: %w", err)
+	}
+	if int64(len(data)) > blobListMaxBytes {
+		return nil, fmt.Errorf("blob list file exceeds %d-byte limit; use a shorter list", blobListMaxBytes)
 	}
 	var blobs []string
 	for _, line := range strings.Split(string(data), "\n") {
@@ -399,8 +424,19 @@ func (a *app) runManifest(ctx context.Context, client *Client, cfg Config, args 
 		if cfg.Output == "json" {
 			return manifestJSONOutput(manifest, includeManifestXML), nil
 		}
-		if err := os.WriteFile(outputFile, []byte(manifest.ManifestXML), 0o600); err != nil {
+		f, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+		if err != nil {
+			if os.IsExist(err) {
+				return nil, fmt.Errorf("output file %q already exists; remove it or choose a different path", outputFile)
+			}
+			return nil, fmt.Errorf("create manifest file: %w", err)
+		}
+		if _, err := f.WriteString(manifest.ManifestXML); err != nil {
+			_ = f.Close()
 			return nil, fmt.Errorf("write manifest file: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return nil, fmt.Errorf("close manifest file: %w", err)
 		}
 		_, err = fmt.Fprintf(a.stdout, "wrote manifest %s to %s\n", manifest.JobID, outputFile)
 		return nil, err
@@ -472,7 +508,9 @@ func partitionSignArgs(args []string) ([]string, []string) {
 		if _, known := knownFlags[name]; !known || hasInlineValue {
 			continue
 		}
-		if i+1 < len(args) {
+		// Do not consume "--" as the value; leave it for the sentinel handler above
+		// so that fs.Parse will report a missing-value error.
+		if i+1 < len(args) && args[i+1] != "--" {
 			i++
 			flagArgs = append(flagArgs, args[i])
 		}

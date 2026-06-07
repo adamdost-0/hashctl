@@ -694,3 +694,175 @@ func TestVersionCommandsDoNotRequireAPIConfig(t *testing.T) {
 		})
 	}
 }
+
+// ---- Item 5: batch-size bounds ----
+
+func TestBatchSizeZeroIsRejected(t *testing.T) {
+	code, _, stderr := runTest(
+		[]string{"job", "create", "--source-account", "acct", "--source-container", "input", "--batch-size", "0"},
+		nil,
+		func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatal("handler should not be called")
+		},
+	)
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "at least 1") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestBatchSizeNegativeIsRejected(t *testing.T) {
+	code, _, stderr := runTest(
+		[]string{"job", "create", "--source-account", "acct", "--source-container", "input", "--batch-size", "-1"},
+		nil,
+		func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatal("handler should not be called")
+		},
+	)
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "at least 1") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestBatchSizeOverMaxRejected(t *testing.T) {
+	code, _, stderr := runTest(
+		[]string{"job", "create", "--source-account", "acct", "--source-container", "input", "--batch-size", "10001"},
+		nil,
+		func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatal("handler should not be called")
+		},
+	)
+	if code != ExitUsage {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "10000") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestBatchSizeNotProvidedIsAllowed(t *testing.T) {
+	code, _, stderr := runTest(
+		[]string{"job", "create", "--source-account", "acct", "--source-container", "input"},
+		nil,
+		func(w http.ResponseWriter, r *http.Request) {
+			writeJSONResponse(t, w, http.StatusAccepted, jobPayload("job-1", "hashing"))
+		},
+	)
+	if code != ExitSuccess {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+}
+
+// ---- Item 6: partitionSignArgs -- handling ----
+
+func TestSignDoubleDashSentinelReturnsUsageError(t *testing.T) {
+	// sign first --key-id -- job-1 must not dispatch with key_id="--";
+	// it must return a usage error (flag needs an argument: -key-id).
+	code, _, stderr := runTest(
+		[]string{"sign", "first", "--key-id", "--", "job-1"},
+		nil,
+		func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatal("handler should not be called for malformed --key-id")
+		},
+	)
+	if code != ExitUsage {
+		t.Fatalf("expected ExitUsage, got code=%d stderr=%s", code, stderr)
+	}
+}
+
+// ---- Item 8: runMultiSmoke best-effort cancel ----
+
+func TestMultiSmokeCancelsCreatedJobsOnPartialFailure(t *testing.T) {
+	var mu sync.Mutex
+	createCount := 0
+	var createdIDs []string
+	var cancelledIDs []string
+
+	code, _, _ := runTest(
+		[]string{
+			"--poll-interval", "1ms", "--poll-timeout", "200ms",
+			"smoke", "multi-job",
+			"--source-account", "acct", "--source-container", "input", "--run-id", "test-cancel",
+		},
+		nil,
+		func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case r.Method == http.MethodPost && r.URL.Path == "/job/create":
+				createCount++
+				if createCount <= 2 {
+					id := "job-cancel-" + strings.TrimLeft(strings.TrimLeft(r.Header.Get("x-correlation-id"), "test-cancel"), "-")
+					createdIDs = append(createdIDs, id)
+					writeJSONResponse(t, w, http.StatusAccepted, jobPayload(id, "hashing"))
+				} else {
+					writeJSONResponse(t, w, http.StatusInternalServerError,
+						map[string]any{"detail": map[string]any{"error_code": "test_error"}})
+				}
+			case r.Method == http.MethodDelete:
+				id := strings.TrimPrefix(r.URL.Path, "/job/")
+				cancelledIDs = append(cancelledIDs, id)
+				writeJSONResponse(t, w, http.StatusOK, jobPayload(id, "cancelled"))
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		},
+	)
+	if code == ExitSuccess {
+		t.Fatal("expected non-zero exit for partial failure")
+	}
+	mu.Lock()
+	created := append([]string{}, createdIDs...)
+	cancelled := append([]string{}, cancelledIDs...)
+	mu.Unlock()
+
+	// Every successfully-created job must appear in the cancel list.
+	for _, id := range created {
+		found := false
+		for _, cid := range cancelled {
+			if cid == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("created job %s was not cancelled; cancels=%v", id, cancelled)
+		}
+	}
+}
+
+// ---- Item 9: --output-file O_EXCL ----
+
+func TestManifestGetOutputFileAlreadyExistsFails(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "manifest.xml")
+	if err := os.WriteFile(outputPath, []byte("existing content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := runTest(
+		[]string{"manifest", "get", "--output-file", outputPath, "job-1"},
+		nil,
+		func(w http.ResponseWriter, r *http.Request) {
+			writeJSONResponse(t, w, http.StatusOK,
+				ManifestResponse{JobID: "job-1", Status: "complete", ManifestXML: "<Root/>"})
+		},
+	)
+	if code == ExitSuccess {
+		t.Fatal("expected error when output file already exists")
+	}
+	if !strings.Contains(stderr, "already exists") {
+		t.Fatalf("expected 'already exists' in stderr, got: %q", stderr)
+	}
+	// Verify original content was not clobbered.
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "existing content" {
+		t.Fatalf("output file was overwritten: %q", string(data))
+	}
+}

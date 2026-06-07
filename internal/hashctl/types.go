@@ -32,6 +32,12 @@ func (s *stringList) Set(value string) error {
 	return nil
 }
 
+const (
+	metadataMaxCount  = 100
+	metadataMaxKeyLen = 256
+	metadataMaxValLen = 4096
+)
+
 type keyValueList map[string]string
 
 func (k keyValueList) String() string {
@@ -46,6 +52,9 @@ func (k keyValueList) String() string {
 }
 
 func (k keyValueList) Set(value string) error {
+	if len(k) >= metadataMaxCount {
+		return fmt.Errorf("too many metadata entries (max %d)", metadataMaxCount)
+	}
 	key, val, ok := strings.Cut(value, "=")
 	if !ok {
 		return fmt.Errorf("metadata must use key=value format")
@@ -53,6 +62,12 @@ func (k keyValueList) Set(value string) error {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return fmt.Errorf("metadata key is required")
+	}
+	if len(key) > metadataMaxKeyLen {
+		return fmt.Errorf("metadata key exceeds %d-character limit", metadataMaxKeyLen)
+	}
+	if len(val) > metadataMaxValLen {
+		return fmt.Errorf("metadata value exceeds %d-character limit", metadataMaxValLen)
 	}
 	k[key] = val
 	return nil
