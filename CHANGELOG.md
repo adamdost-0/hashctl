@@ -20,11 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Architecture Decision Records under `docs/decisions/` and a STRIDE threat model.
 - Package documentation (`doc.go`) for `cmd/hashctl` and `internal/hashctl`.
 - A **Memory & context learning** section in `.github/copilot-instructions.md`.
+- GoReleaser release pipeline (`.goreleaser.yaml` + `release.yml`): tag-triggered,
+  cross-platform archives with per-file checksums, and SLSA build-provenance attestation.
+- OpenSSF Scorecard workflow (`scorecard.yml`) and a `copilot-setup-steps.yml` to bootstrap
+  the Copilot cloud-agent environment.
+- Copilot agent skills (`go-validation-gate`, `code-review`, `security-review`,
+  `release-notes-writer`) and prompt files (`generate-go-tests`, `update-godoc`).
 
 ### Changed
 
 - Hardened `build-hashctl.yml`: least-privilege per-job permissions, SHA-pinned actions,
   and upgraded the gitleaks action to v3.
+- Decoupled release publishing from `build-hashctl.yml` (now handled by GoReleaser in
+  `release.yml`); its build job is now a cross-platform packaging smoke test.
+- `install-hashctl.sh` and `verify-hashctl-release.sh` verify checksums in a
+  format-agnostic way, compatible with GoReleaser's per-file `.sha256` sidecars.
 
 ## [0.1.0] - 2026-06-02
 
