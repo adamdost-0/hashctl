@@ -39,7 +39,12 @@ gh release download "${release_tag}" \
 
 (
   cd "${download_dir}"
-  shasum -a 256 -c "${checksum}"
+  expected_sum="$(awk '{print $1}' "${checksum}" | head -n1)"
+  actual_sum="$(shasum -a 256 "${artifact}" | awk '{print $1}')"
+  if [[ "${expected_sum}" != "${actual_sum}" ]]; then
+    echo "Checksum mismatch for ${artifact}" >&2
+    exit 1
+  fi
   tar -xzf "${artifact}"
 )
 

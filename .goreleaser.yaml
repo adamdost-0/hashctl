@@ -1,0 +1,60 @@
+# GoReleaser configuration for hashctl.
+# Docs: https://goreleaser.com
+# Validate locally with: goreleaser check && goreleaser release --snapshot --clean
+#
+# The archive layout (name, wrap-in-directory, per-file .sha256 sidecars) is kept
+# compatible with scripts/install-hashctl.sh and scripts/verify-hashctl-release.sh.
+version: 2
+
+project_name: hashctl
+
+env:
+  - CGO_ENABLED=0
+  - GOPROXY=off
+  - GOSUMDB=off
+
+builds:
+  - id: hashctl
+    main: ./cmd/hashctl
+    binary: hashctl
+    flags:
+      - -trimpath # strip local paths -> reproducible builds
+      - -mod=readonly # never modify go.mod/go.sum during release
+    ldflags:
+      - -s -w # strip symbol table and DWARF
+      - -X github.com/adamdost-0/hashctl/internal/hashctl.Version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible archive timestamps
+
+archives:
+  - id: hashctl
+    ids: [hashctl]
+    # Matches the existing artifact contract: hashctl-<version>-<os>-<arch>.tar.gz
+    name_template: "hashctl-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    formats: [tar.gz]
+    # Wrap the binary in hashctl-<version>-<os>-<arch>/ so install-hashctl.sh finds it.
+    wrap_in_directory: true
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  # split: true emits one <artifact>.sha256 sidecar per archive (not a single
+  # checksums.txt), matching scripts/install-hashctl.sh and verify-hashctl-release.sh.
+  split: true
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev-{{ .ShortCommit }}"
+
+changelog:
+  use: github-native
+
+release:
+  prerelease: auto
+  name_template: "hashctl {{ .Tag }}"
