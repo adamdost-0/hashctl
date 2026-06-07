@@ -18,13 +18,48 @@ type Client struct {
 	config     Config
 }
 
+// secureCheckRedirect is the CheckRedirect policy installed on every http.Client
+// used by hashctl. It enforces two invariants on every redirect hop:
+//  1. Never follow a redirect that downgrades https→http (scheme downgrade
+//     would expose the bearer token in cleartext — ADR-0004).
+//  2. Never follow a redirect to a non-loopback plaintext http host (re-applies
+//     the same scheme/loopback rule enforced by applyHeaders on initial requests).
+//  3. Cap redirects at 10 hops (mirrors Go's built-in default behaviour).
+func secureCheckRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	if req.URL.Scheme != "http" {
+		return nil
+	}
+	// Target is plaintext http — refuse if the original request used https (downgrade).
+	if len(via) > 0 && via[0].URL.Scheme == "https" {
+		return fmt.Errorf("redirect from https to http refused: scheme downgrade would expose bearer token")
+	}
+	// Also refuse non-loopback plaintext http even without a scheme change.
+	if !isLoopbackHost(req.URL.Hostname()) {
+		return fmt.Errorf("redirect to non-loopback plaintext http refused: would expose bearer token")
+	}
+	return nil
+}
+
 func NewClient(cfg Config, httpClient *http.Client) (*Client, error) {
 	parsed, err := url.Parse(cfg.APIURL)
 	if err != nil {
 		return nil, err
 	}
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: cfg.Timeout}
+		httpClient = &http.Client{
+			Timeout:       cfg.Timeout,
+			CheckRedirect: secureCheckRedirect,
+		}
+	} else {
+		// Shallow-copy the caller's client so we don't mutate their value,
+		// then install the security redirect policy.  This is a deliberate
+		// security control and takes precedence over any existing policy.
+		c := *httpClient
+		c.CheckRedirect = secureCheckRedirect
+		httpClient = &c
 	}
 	return &Client{baseURL: parsed, httpClient: httpClient, config: cfg}, nil
 }
