@@ -26,3 +26,82 @@ func TestRedactScrubsSensitiveValues(t *testing.T) {
 		t.Fatalf("expected [REDACTED] marker in %q", redacted)
 	}
 }
+
+func TestRedactHighEntropyHeuristics(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		needle      string
+		shouldScrub bool
+	}{
+		{
+			name:        "padded base64 token",
+			input:       `value "RkFLRV9TRUNSRVRfVE9LRU5fSVNTVUVfRk9VUl9YWA==" , done`,
+			needle:      "RkFLRV9TRUNSRVRfVE9LRU5fSVNTVUVfRk9VUl9YWA==",
+			shouldScrub: true,
+		},
+		{
+			name:        "32 char hex token",
+			input:       "token 0123456789abcdef0123456789abcdef;",
+			needle:      "0123456789abcdef0123456789abcdef",
+			shouldScrub: true,
+		},
+		{
+			name:        "36 char base62 token",
+			input:       "token FakeBase62Token0123456789abcdefXYZ123",
+			needle:      "FakeBase62Token0123456789abcdefXYZ123",
+			shouldScrub: true,
+		},
+		{
+			name:        "dot delimited opaque token",
+			input:       "id fake.segment.token.0123456789abcdef.ABCDEF",
+			needle:      "fake.segment.token.0123456789abcdef.ABCDEF",
+			shouldScrub: true,
+		},
+		{
+			name:        "normal sentence",
+			input:       "this is a normal sentence about hashctl output handling",
+			needle:      "[REDACTED_SECRET]",
+			shouldScrub: false,
+		},
+		{
+			name:        "uuid",
+			input:       "id 123e4567-e89b-12d3-a456-426614174000",
+			needle:      "[REDACTED_SECRET]",
+			shouldScrub: false,
+		},
+		{
+			name:        "short hex",
+			input:       "checksum deadbeef",
+			needle:      "[REDACTED_SECRET]",
+			shouldScrub: false,
+		},
+		{
+			name:        "job id and file path",
+			input:       "job=job-20260607-abcdef12 path=/var/lib/hashctl/jobs/job-20260607-abcdef12/manifest.xml",
+			needle:      "[REDACTED_SECRET]",
+			shouldScrub: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := redact(tc.input)
+			if tc.shouldScrub {
+				if strings.Contains(got, tc.needle) {
+					t.Fatalf("expected %q to be redacted, got: %q", tc.needle, got)
+				}
+				if !strings.Contains(got, "[REDACTED_SECRET]") {
+					t.Fatalf("expected [REDACTED_SECRET] marker in %q", got)
+				}
+				return
+			}
+			if strings.Contains(got, tc.needle) != strings.Contains(tc.input, tc.needle) {
+				t.Fatalf("unexpected transformation: input=%q output=%q", tc.input, got)
+			}
+			if got != tc.input {
+				t.Fatalf("expected non-sensitive input unchanged, got: %q", got)
+			}
+		})
+	}
+}
