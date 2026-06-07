@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Reject literal `--bearer-token` arguments anywhere in argv before command dispatch, preventing post-subcommand token values from being treated as API path parameters and leaked to access logs (#5).
+
 ### Added
 
 - `LICENSE` (MIT), `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`,

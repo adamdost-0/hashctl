@@ -20,6 +20,8 @@ type app struct {
 
 var Version = "dev"
 
+const literalBearerTokenError = "literal bearer token arguments are not supported; use HASH_ENGINE_BEARER_TOKEN or --bearer-token-file"
+
 func Run(args []string, stdout io.Writer, stderr io.Writer) int {
 	return New(stdout, stderr, os.Getenv, nil).Run(args)
 }
@@ -40,6 +42,10 @@ func (a *app) Run(args []string) int {
 			return ExitUsage
 		}
 		return ExitSuccess
+	}
+	if err := rejectLiteralBearerToken(commandArgs); err != nil {
+		writeError(a.stderr, global.Output, err)
+		return ExitUsage
 	}
 	if handled, err := a.handleMetaCommand(commandArgs); handled {
 		if err != nil {
@@ -191,8 +197,8 @@ func parseGlobal(args []string) (Config, []string, error) {
 				return cfg, nil, err
 			}
 			cfg.BearerTokenFile = v
-		case "--bearer-token":
-			return cfg, nil, fmt.Errorf("literal bearer token arguments are not supported; use HASH_ENGINE_BEARER_TOKEN or --bearer-token-file")
+		case "--bearer-token", "-bearer-token":
+			return cfg, nil, fmt.Errorf(literalBearerTokenError)
 		case "--poll-interval":
 			v, err := take()
 			if err != nil {
@@ -222,6 +228,16 @@ func parseGlobal(args []string) (Config, []string, error) {
 	cfg.LocalGroups = groups
 	cfg.LocalAppRoles = roles
 	return cfg, nil, nil
+}
+
+func rejectLiteralBearerToken(args []string) error {
+	for _, arg := range args {
+		name, _, ok := flagName(arg)
+		if ok && name == "bearer-token" {
+			return fmt.Errorf(literalBearerTokenError)
+		}
+	}
+	return nil
 }
 
 func (a *app) handleMetaCommand(args []string) (bool, error) {

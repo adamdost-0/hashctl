@@ -538,16 +538,66 @@ func TestJobGetForbiddenSurfacesAPIError(t *testing.T) {
 }
 
 func TestLiteralBearerTokenFlagIsRejected(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := New(&stdout, &stderr, testEnv(map[string]string{"HASH_ENGINE_API": "http://127.0.0.1:1"}), http.DefaultClient).Run(
-		[]string{"--bearer-token", "secret", "health"},
-	)
-	if code != ExitUsage {
-		t.Fatalf("code=%d", code)
+	cases := [][]string{
+		{"--bearer-token", "secret", "health"},
+		{"--bearer-token=secret", "health"},
+		{"-bearer-token", "secret", "health"},
+		{"-bearer-token=secret", "health"},
 	}
-	if !strings.Contains(stderr.String(), "HASH_ENGINE_BEARER_TOKEN") {
-		t.Fatalf("stderr = %s", stderr.String())
+	for _, args := range cases {
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		code := New(&stdout, &stderr, testEnv(map[string]string{"HASH_ENGINE_API": "http://127.0.0.1:1"}), http.DefaultClient).Run(args)
+		if code != ExitUsage {
+			t.Fatalf("args=%v code=%d", args, code)
+		}
+		if !strings.Contains(stderr.String(), "HASH_ENGINE_BEARER_TOKEN") {
+			t.Fatalf("args=%v stderr = %s", args, stderr.String())
+		}
+	}
+}
+
+func TestLiteralBearerTokenFlagAfterSubcommandIsRejected(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "job get inline", args: []string{"job", "get", "--bearer-token=x"}},
+		{name: "job cancel inline", args: []string{"job", "cancel", "--bearer-token=x"}},
+		{name: "manifest build inline", args: []string{"manifest", "build", "--bearer-token=x"}},
+		{name: "sign first inline", args: []string{"sign", "first", "--bearer-token=x"}},
+		{name: "sign second inline", args: []string{"sign", "second", "--bearer-token=x"}},
+		{name: "job get space separated", args: []string{"job", "get", "--bearer-token", "x"}},
+		{name: "job get single dash inline", args: []string{"job", "get", "-bearer-token=x"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, _, stderr := runTest(tc.args, nil, func(_ http.ResponseWriter, _ *http.Request) {
+				t.Fatal("handler should not be called")
+			})
+			if code != ExitUsage {
+				t.Fatalf("code=%d stderr=%s", code, stderr)
+			}
+			if !strings.Contains(stderr, redact(literalBearerTokenError)) {
+				t.Fatalf("stderr = %q", stderr)
+			}
+		})
+	}
+}
+
+func TestJobIDContainingBearerTokenSubstringIsAccepted(t *testing.T) {
+	code, stdout, stderr := runTest([]string{"job", "get", "my--bearer-token-job"}, nil, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/job/my--bearer-token-job" {
+			t.Fatalf("%s %s", r.Method, r.URL.Path)
+		}
+		writeJSONResponse(t, w, http.StatusOK, jobPayload("my--bearer-token-job", "queued"))
+	})
+	if code != ExitSuccess {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stdout, "my--bearer-token-job") {
+		t.Fatalf("stdout = %q", stdout)
 	}
 }
 
