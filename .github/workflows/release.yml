@@ -43,22 +43,45 @@ jobs:
             exit 1
           fi
 
-      - name: Verify tag is annotated and signed
+      - name: Configure tag signature verification
+        # Make the release signer's public key available so `git verify-tag` can
+        # verify the tag. Fail closed with an actionable message if no signing
+        # material is configured. See .github/COMPENSATING_CONTROLS.md.
+        env:
+          ALLOWED_SIGNERS: ${{ secrets.ALLOWED_SIGNERS }}
+          TAG_SIGNING_PUBKEY: ${{ secrets.TAG_SIGNING_PUBKEY }}
         run: |
-          # Maintainers must make the signing key/allowed-signers available to the runner
-          # (or rely on the repo tag-protection ruleset) for git verify-tag to pass.
-          # This step is the fail-closed enforcement.
           set -e
-          TAG_TYPE=$(git cat-file -t "$GITHUB_REF_NAME")
+          if [ -n "${ALLOWED_SIGNERS:-}" ]; then
+            mkdir -p ~/.config/git
+            printf '%s\n' "$ALLOWED_SIGNERS" > ~/.config/git/allowed_signers
+            git config gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
+            echo "Configured SSH allowed-signers for tag verification."
+          elif [ -n "${TAG_SIGNING_PUBKEY:-}" ]; then
+            printf '%s\n' "$TAG_SIGNING_PUBKEY" | gpg --import
+            echo "Imported GPG public key for tag verification."
+          else
+            echo "Error: no tag-signing verification material is configured." >&2
+            echo "Set the ALLOWED_SIGNERS (SSH) or TAG_SIGNING_PUBKEY (GPG) repository secret; see .github/COMPENSATING_CONTROLS.md." >&2
+            exit 1
+          fi
+
+      - name: Verify tag is annotated and signed
+        # Fail-closed enforcement that the release tag is annotated and signed.
+        run: |
+          set -e
+          TAG_TYPE=$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")
           if [ "$TAG_TYPE" != "tag" ]; then
-            echo "Error: Release tag $GITHUB_REF_NAME must be an annotated tag, got $TAG_TYPE." >&2
+            echo "Error: release tag $GITHUB_REF_NAME must be an annotated tag, got $TAG_TYPE." >&2
+            echo "Re-create it with: git tag -s -a $GITHUB_REF_NAME -m '...'" >&2
             exit 1
           fi
           if ! git verify-tag "$GITHUB_REF_NAME"; then
-            echo "Error: Release tag $GITHUB_REF_NAME is not properly signed or verifiable." >&2
+            echo "Error: release tag $GITHUB_REF_NAME is not signed or not verifiable." >&2
+            echo "Ensure the ALLOWED_SIGNERS (SSH) or TAG_SIGNING_PUBKEY (GPG) repository secret matches the signing key; see .github/COMPENSATING_CONTROLS.md." >&2
             exit 1
           fi
-          echo "Tag $GITHUB_REF_NAME is an annotated and signed tag."
+          echo "Tag $GITHUB_REF_NAME is annotated and signed."
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
