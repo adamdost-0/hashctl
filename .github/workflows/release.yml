@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0 # GoReleaser needs full history for the changelog
+          fetch-tags: true
 
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -41,6 +42,23 @@ jobs:
             echo "Bump VERSION and re-tag so they agree." >&2
             exit 1
           fi
+
+      - name: Verify tag is annotated and signed
+        run: |
+          # Maintainers must make the signing key/allowed-signers available to the runner
+          # (or rely on the repo tag-protection ruleset) for git verify-tag to pass.
+          # This step is the fail-closed enforcement.
+          set -e
+          TAG_TYPE=$(git cat-file -t "$GITHUB_REF_NAME")
+          if [ "$TAG_TYPE" != "tag" ]; then
+            echo "Error: Release tag $GITHUB_REF_NAME must be an annotated tag, got $TAG_TYPE." >&2
+            exit 1
+          fi
+          if ! git verify-tag "$GITHUB_REF_NAME"; then
+            echo "Error: Release tag $GITHUB_REF_NAME is not properly signed or verifiable." >&2
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME is an annotated and signed tag."
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
