@@ -176,3 +176,46 @@ This file is Copilot’s and the team’s learning journal for the project. It c
 
 **REMEMBER:**
 After every memory reset, Copilot begins completely fresh. The Memory Bank is the only link to previous work. Maintain it with precision and clarity—project effectiveness and security depend on its accuracy.
+
+---
+
+# Project Instructions: hashctl
+
+`hashctl` is a standard-library-only Go CLI client for the Hash Engine REST API (CTS manifest jobs and signing). Module: `github.com/adamdost-0/hashctl`. These concrete instructions complement the Memory Bank above; the `/memory-bank/` files hold the durable project knowledge.
+
+## Build, validate, and test (run before every commit/PR)
+
+Everything runs **offline** — `GOPROXY=off GOSUMDB=off` on every Go command (zero third-party deps, no `go.sum`). The four-step gate mirrors `.github/workflows/build-hashctl.yml`:
+
+```bash
+./scripts/test-hashctl.sh                                   # CGO_ENABLED=0 GOPROXY=off GOSUMDB=off go test ./...
+CGO_ENABLED=0 GOPROXY=off GOSUMDB=off go vet ./...
+gofmt -l .                                                  # must print nothing; fix with: gofmt -w .
+HASHCTL_VERSION=dev ./scripts/build-hashctl.sh             # writes bin/hashctl (untracked)
+```
+
+If installed, also run `golangci-lint run ./...` (config `.golangci.yml`; a `depguard` rule enforces the stdlib-only policy). Single test: `CGO_ENABLED=0 GOPROXY=off GOSUMDB=off go test ./internal/hashctl -run TestName -v`.
+
+## CI gates
+
+A PR fails if any of these fail: `build-hashctl.yml` (test → vet → gofmt → build; gitleaks credential scan; cross-platform packaging), `security.yml` (golangci-lint, govulncheck, dependency-review), `codeql.yml` (CodeQL SAST). Releases are cut by `release.yml` (GoReleaser) from an annotated, signed tag `vX.Y.Z`.
+
+## Architecture
+
+`cmd/hashctl/main.go` is a thin entrypoint calling `hashctl.Run(args, stdout, stderr)`. All logic lives in `internal/hashctl/`: `commands.go` (Run, parseGlobal, dispatch), `client.go` (Client.do, typed errors APIError/TransportError/PollError), `config.go` (resolveConfig precedence + HTTPS guard), `types.go` (exit codes + structs), `output.go` (human/JSON render + redact), `smoke.go`, `help.go`. The `app` struct (stdout/stderr/getenv/httpClient) is the DI seam; tests use `New(...)` with a fake env and an `httptest` client. See `docs/decisions/` (ADRs) and `docs/threat-model.md`.
+
+## Conventions
+
+- **Config precedence:** defaults → `config.json` → env (`HASH_ENGINE_API`, `HASH_ENGINE_BEARER_TOKEN`) → CLI flags (later wins).
+- **Global flags precede the command** (`parseGlobal` stops at the first non-flag arg).
+- **Exit codes** (`types.go`): 0 success, 2 usage, 3 transport, 4 API 4xx, 5 API 5xx, 6 poll timeout.
+- **Security (enforced in code):** literal `--bearer-token` rejected (use `HASH_ENGINE_BEARER_TOKEN` or a `chmod 600` `--bearer-token-file`); bearer refused over non-loopback plaintext `http`; non-loopback API URLs must be `https`; **all output routed through `redact()`**.
+- **Output modes:** `--output human|json`; a new result type needs a `writeHuman` case.
+- **Versioning:** `VERSION` injected via ldflags into `hashctl.Version`; Semantic Versioning + Conventional Commits; record changes in `CHANGELOG.md`.
+- **Tests** use `net/http/httptest`; no external frameworks.
+
+## Do / Do not
+
+**Do:** run the validation gate before committing; keep stdlib-only and offline; route user-facing strings through `redact()`; capture durable learnings in the Memory Bank and via `store_memory`.
+
+**Do not:** add `require` entries to `go.mod` or a `go.sum`; accept a literal `--bearer-token`; emit secrets unredacted; commit `bin/`, `artifacts/`, `dist/`, or live credentials.
