@@ -5,18 +5,19 @@ on:
   push:
     branches: [main]
   pull_request:
-  release:
-    types: [published]
 
-permissions:
-  contents: write
+# Release publishing is handled by release.yml (GoReleaser, tag-triggered).
+# Least privilege: deny all permissions at the workflow level; grant per job below.
+permissions: {}
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
       - name: Clean stale build outputs
@@ -38,12 +39,14 @@ jobs:
 
   credential-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
       - name: Run gitleaks credential scan (connected-side CI control)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
@@ -53,6 +56,8 @@ jobs:
       - test
       - credential-scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -62,8 +67,8 @@ jobs:
           - goos: darwin
             goarch: arm64
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
       - name: Clean stale build outputs
@@ -71,15 +76,10 @@ jobs:
       - name: Read version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION=$(./scripts/get-hashctl-version.sh)
-          fi
+          VERSION="$(./scripts/get-hashctl-version.sh)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "📦 Version: $VERSION (tag: v$VERSION)"
-      - name: Build and package
+          echo "📦 Version: $VERSION"
+      - name: Build and package (cross-platform packaging smoke test)
         run: ./scripts/package-hashctl.sh
         env:
           HASHCTL_VERSION: ${{ steps.version.outputs.version }}
@@ -90,32 +90,3 @@ jobs:
           artifact="artifacts/hashctl/hashctl-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
           ls -la "$artifact" "$artifact.sha256"
           (cd artifacts/hashctl && shasum -a 256 -c "$(basename "$artifact").sha256")
-      - name: Upload to release
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          artifact="artifacts/hashctl/hashctl-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz"
-          checksum="${artifact}.sha256"
-          TAG="${{ steps.version.outputs.tag }}"
-          max_attempts=12
-          sleep_seconds=10
-          attempt=1
-          until gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; do
-            if [ "$attempt" -ge "$max_attempts" ]; then
-              echo "Release ${TAG} not found after $((max_attempts * sleep_seconds))s"
-              exit 1
-            fi
-            echo "Release ${TAG} not available yet (attempt ${attempt}/${max_attempts}); retrying in ${sleep_seconds}s..."
-            sleep "$sleep_seconds"
-            attempt=$((attempt + 1))
-          done
-          gh release upload "$TAG" "$artifact" "$checksum" --repo "$GITHUB_REPOSITORY" --clobber
-
-      - name: Verify release asset download
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v'))
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HASHCTL_VERSION: ${{ steps.version.outputs.version }}
-          HASHCTL_PLATFORM: ${{ matrix.goos }}-${{ matrix.goarch }}
-        run: ./scripts/verify-hashctl-release.sh

@@ -142,7 +142,7 @@ func (c *Client) do(ctx context.Context, method string, path string, body any, o
 	if err != nil {
 		return TransportError{Err: err, Route: method + " " + path}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return TransportError{Err: err, Route: method + " " + path}

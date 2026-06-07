@@ -1,0 +1,39 @@
+# --- Go build outputs ---
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# --- Test / coverage artifacts ---
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# --- hashctl release artifacts ---
+/artifacts/
+
+# --- GoReleaser ---
+/dist/
+
+# --- OS-generated ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Editor / IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Local environment ---
+.env
+.env.local
