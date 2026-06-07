@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Refuse HTTPS→HTTP redirect downgrade to protect bearer token** (#6): `NewClient` now
+  installs a `secureCheckRedirect` policy on every `http.Client` (whether internally created
+  or injected). The policy refuses any redirect that downgrades `https` to `http`, and also
+  refuses any redirect to a non-loopback plaintext `http` host, ensuring the bearer token
+  can never be transmitted in cleartext as a result of a malicious or misconfigured 3xx
+  response (ADR-0004).
+
 ### Added
 
 - `LICENSE` (MIT), `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`,

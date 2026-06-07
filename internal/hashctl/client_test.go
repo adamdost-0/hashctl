@@ -74,3 +74,86 @@ func TestLoopbackHTTPWithBearerTokenIsAllowed(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+// TestHTTPSToHTTPRedirectRefusedBearerTokenNotLeaked verifies that a 3xx redirect
+// from an HTTPS server to a plaintext HTTP endpoint is refused by secureCheckRedirect,
+// and that the "attacker" HTTP endpoint never receives the Authorization header.
+func TestRedirectHTTPSToHTTPRefusedBearerTokenNotLeaked(t *testing.T) {
+	// Attacker server: plain HTTP.  Records any Authorization header it sees and
+	// how many times it is hit.
+	var attackerGotAuth string
+	var attackerHits int
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attackerHits++
+		attackerGotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer attacker.Close()
+
+	// TLS server that issues a 302 redirect to the plain-HTTP attacker.
+	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, attacker.URL+"/captured", http.StatusFound)
+	}))
+	defer tlsServer.Close()
+
+	// Build the Client with the TLS server's transport (so the self-signed cert
+	// is trusted) and a bearer token that must never reach the attacker.
+	client, err := NewClient(
+		Config{
+			APIURL:      tlsServer.URL,
+			BearerToken: "secret-bearer-token",
+			Timeout:     5 * time.Second,
+		},
+		tlsServer.Client(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The call must return an error — the redirect must be refused.
+	err = client.do(context.Background(), http.MethodGet, "/health", nil, nil)
+	if err == nil {
+		t.Fatal("expected error: redirect from https to http should be refused, got nil")
+	}
+
+	// The attacker endpoint must never have been reached at all, and never have
+	// received the Authorization header.
+	if attackerHits != 0 {
+		t.Fatalf("attacker endpoint was reached %d time(s); the downgraded request must not be sent", attackerHits)
+	}
+	if attackerGotAuth != "" {
+		t.Fatalf("bearer token leaked to attacker: Authorization = %q", attackerGotAuth)
+	}
+}
+
+// TestLoopbackHTTPRedirectAllowed verifies that a same-scheme redirect within a
+// loopback HTTP server (no downgrade) is still followed normally.
+func TestRedirectLoopbackHTTPAllowed(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/original", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/redirected", http.StatusFound)
+	})
+	mux.HandleFunc("/redirected", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client, err := NewClient(
+		Config{
+			APIURL:      server.URL,
+			BearerToken: "token",
+			Timeout:     5 * time.Second,
+		},
+		server.Client(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out map[string]any
+	if err := client.do(context.Background(), http.MethodGet, "/original", nil, &out); err != nil {
+		t.Fatalf("same-scheme loopback redirect should be allowed, got: %v", err)
+	}
+}
