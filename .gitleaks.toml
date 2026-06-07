@@ -16,4 +16,5 @@ regexes = [
   '''0123456789abcdef0123456789abcdef''',
   '''FakeBase62Token0123456789abcdefXYZ123''',
   '''fake\.segment\.token\.0123456789abcdef\.ABCDEF''',
+  '''AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00''',
 ]

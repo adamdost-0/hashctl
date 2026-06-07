@@ -6,7 +6,6 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"unicode"
 )
 
 func writeJSON(w io.Writer, value any) error {
@@ -165,7 +164,7 @@ var (
 	}
 	querySecretPattern = regexp.MustCompile(`(?i)[?&](sig|signature|token|access_token|se|sp|sv|spr|sr|skoid|sktid|skt|ske|sks|skv)=[^&\s]+`)
 	jwtPattern         = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`)
-	highEntropyPattern = regexp.MustCompile("(^|[\\s\"'`,;])([A-Za-z0-9+/_=.:-]{32,})")
+	highEntropyPattern = regexp.MustCompile("(^|[\\s\"'`,;>([{|@])([A-Za-z0-9+/_=.:-]{32,})")
 	uuidPattern        = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
@@ -228,7 +227,7 @@ func redactHighEntropyTokens(value string) string {
 		prefix := value[prefixStart:prefixEnd]
 		token := value[tokenStart:tokenEnd]
 		b.WriteString(prefix)
-		if hasRightTokenBoundary(value, tokenEnd) && looksSensitiveToken(token) {
+		if looksSensitiveToken(token) {
 			b.WriteString("[REDACTED_SECRET]")
 		} else {
 			b.WriteString(token)
@@ -237,22 +236,6 @@ func redactHighEntropyTokens(value string) string {
 	}
 	b.WriteString(value[last:])
 	return b.String()
-}
-
-func hasRightTokenBoundary(value string, index int) bool {
-	if index >= len(value) {
-		return true
-	}
-	return isDelimiter(value[index])
-}
-
-func isDelimiter(ch byte) bool {
-	switch ch {
-	case '"', '\'', '`', ',', ';':
-		return true
-	default:
-		return unicode.IsSpace(rune(ch))
-	}
 }
 
 func looksPathLike(value string) bool {

@@ -59,6 +59,30 @@ func TestRedactHighEntropyHeuristics(t *testing.T) {
 			shouldScrub: true,
 		},
 		{
+			name:        "secret followed by closing paren",
+			input:       "failed: token AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00(invalid)",
+			needle:      "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00",
+			shouldScrub: true,
+		},
+		{
+			name:        "secret in pipe delimited log",
+			input:       "SEVERITY|AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00|context",
+			needle:      "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00",
+			shouldScrub: true,
+		},
+		{
+			name:        "secret in xml tag value",
+			input:       "<SignatureValue>AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00</SignatureValue>",
+			needle:      "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00",
+			shouldScrub: true,
+		},
+		{
+			name:        "secret in parentheses at start",
+			input:       "error(AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00)",
+			needle:      "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD00",
+			shouldScrub: true,
+		},
+		{
 			name:        "normal sentence",
 			input:       "this is a normal sentence about hashctl output handling",
 			needle:      "[REDACTED_SECRET]",
