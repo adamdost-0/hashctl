@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Copilot cloud-agent environment.
 - Copilot agent skills (`go-validation-gate`, `code-review`, `security-review`,
   `release-notes-writer`) and prompt files (`generate-go-tests`, `update-godoc`).
+- A host-agnostic Go 1.25 development sandbox: `.devcontainer/` (devcontainer.json +
+  Dockerfile) and `scripts/sandbox.sh`, which build and test the project inside a
+  `golang:1.25` container (offline, stdlib-only, as the host user) so contributors and
+  agents can build/test without installing the Go toolchain on the host.
 - Populated the Copilot Memory Bank (`memory-bank/` core files: projectbrief,
   productContext, systemPatterns, techContext, activeContext, progress, copilot-rules)
   and integrated hashctl project instructions into `.github/copilot-instructions.md`
