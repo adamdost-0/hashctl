@@ -1,0 +1,20 @@
+{
+  "name": "hashctl (Go 1.25 sandbox)",
+  "build": { "dockerfile": "Dockerfile" },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "CGO_ENABLED": "0",
+    "GOPROXY": "off",
+    "GOSUMDB": "off"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go"],
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "off",
+        "go.formatTool": "gofmt"
+      }
+    }
+  },
+  "postCreateCommand": "go version && go build ./... && go test ./..."
+}
