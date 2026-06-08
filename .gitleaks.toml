@@ -3,25 +3,16 @@ title = "hashctl gitleaks config"
 [extend]
 useDefault = true
 
-[[allowlists]]
-description = "Allow deterministic secret-like literals in redaction unit tests"
+[allowlist]
+description = """\
+Allow deterministic, obviously-fake credential fixtures planted in the redaction \
+unit tests (issues #3, #4). These files exist only to prove that redact() scrubs \
+secrets: the fixtures decode to "fakesig"/"fakekey" and a JWT whose payload is \
+{"sub":"fake"} — no real credentials live here. Scoped by path to these two test \
+files. NOTE: gitleaks-action (pinned 8.24.x) honours the singular [allowlist] \
+table; the array-of-tables [[allowlists]] form is silently ignored by that \
+version, so keep this as a single [allowlist]."""
 paths = [
   '''internal/hashctl/output_test\.go''',
-]
-regexTarget = "line"
-regexes = [
-  '''AccountKey=abc123SECRET==''',
-  '''secret=AbCdEf0123456789AbCdEf0123456789AbCdEf01''',
-]
-
-[[allowlists]]
-description = "Allow obviously-fake credential fixtures in success-output redaction tests (issue #3)"
-paths = [
   '''internal/hashctl/redaction_test\.go''',
-]
-regexTarget = "line"
-regexes = [
-  '''ZmFrZXNpZw''',
-  '''ZmFrZWtleQ''',
-  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9''',
 ]
