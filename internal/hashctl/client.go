@@ -89,9 +89,11 @@ func (c *Client) WaitForJob(ctx context.Context, jobID string, target string) (J
 	deadline := time.Now().Add(c.config.PollTimeout)
 	interval := c.config.PollInterval
 	var last JobRecord
+	var lastErr error
 	for {
 		job, err := c.GetJob(ctx, jobID)
 		if err == nil {
+			lastErr = nil
 			last = job
 			if job.Status == target {
 				return job, nil
@@ -100,9 +102,17 @@ func (c *Client) WaitForJob(ctx context.Context, jobID string, target string) (J
 				return job, PollError{Job: job, TargetState: target, Terminal: true}
 			}
 		} else if apiErr, ok := err.(APIError); ok && apiErr.HTTPStatus >= 400 && apiErr.HTTPStatus < 500 {
+			// 4xx: authoritative client error, exit immediately.
 			return last, err
+		} else {
+			// 5xx or transport error: track it; if we exhaust the deadline we return
+			// the real error (exit 5/3) rather than masking it as poll-timeout (exit 6).
+			lastErr = err
 		}
 		if time.Now().Add(interval).After(deadline) {
+			if lastErr != nil {
+				return last, lastErr
+			}
 			return last, PollError{Job: last, TargetState: target}
 		}
 		select {

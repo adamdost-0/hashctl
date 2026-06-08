@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Hardened `isLoopbackHost` to resolve the name `localhost` via DNS and accept plaintext
+  `http` only if every resolved address is loopback; IP-literal loopback addresses
+  (127.x.x.x, ::1) continue to be accepted without DNS. Fails closed if resolution fails
+  (fixes U3-001, ADR-0004, #8).
+- `manifest get --output-file` now uses `O_EXCL` (create-exclusive) to refuse overwriting
+  an existing file, preventing silent clobbering of outputs (fixes U5-004, #8).
+- GoReleaser tool version pinned to exact `2.12.7` in `release.yml`; floating `~> v2`
+  removed to prevent unreviewed upstream tool changes from altering release artifacts
+  (fixes U2-003, #8).
+
+### Fixed
+
+- `WaitForJob` now surfaces 5xx/transport errors directly (exit 5/3) instead of masking
+  them as poll-timeout (exit 6) when the deadline expires, preserving ADR-0002 exit-code
+  semantics (fixes U6-002, #8).
+- `runMultiSmoke` performs best-effort `CancelJob` (10 s context) for all already-created
+  jobs when a parallel submission fails, preventing orphaned server-side jobs
+  (fixes U6-003, #8).
+- Batch-size validation: `--batch-size 0` and negative values now correctly rejected;
+  an upper bound of 10 000 is enforced (fixes U5-003, #8).
+- `partitionSignArgs` no longer consumes `--` as a flag value; `sign first --key-id --
+  <job>` now returns a usage error instead of dispatching with a malformed key ID
+  (fixes U6-001, #8).
+- `readBlobList` capped at 4 MiB; metadata entries capped at 100 keys
+  (256-char key / 4096-char value) to prevent local memory exhaustion (fixes U5-002, #8).
+- Updated `.github/COMPENSATING_CONTROLS.md` to reflect the active branch ruleset and
+  document enforced controls (required PR review, status checks, signed commits, linear
+  history, tag protection); resolves the contradiction with `CONTRIBUTING.md`
+  (fixes U2-004, #8).
+
 ### Added
 
 - `LICENSE` (MIT), `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`,

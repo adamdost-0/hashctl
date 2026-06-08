@@ -39,13 +39,13 @@ linters:
       - path: _test\.go
         linters:
           - gosec
-      # G304: hashctl legitimately reads operator-specified file paths (config file,
+      # G304/G703: hashctl legitimately reads operator-specified file paths (config file,
       # --bearer-token-file, --blob-list-file). These paths are local operator input,
-      # not untrusted network data.
+      # not untrusted network data; taint-based path-traversal (G703) is therefore N/A.
       - path: (config|commands)\.go
         linters:
           - gosec
-        text: G304
+        text: G304|G703
 
 formatters:
   enable:

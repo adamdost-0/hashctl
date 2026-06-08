@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 )
 
 func (a *app) runSmoke(ctx context.Context, client *Client, cfg Config, args []string) (any, error) {
@@ -150,6 +151,16 @@ func (a *app) runMultiSmoke(ctx context.Context, client *Client, cfg Config, arg
 	}
 	submitWG.Wait()
 	if submitErr != nil {
+		// Best-effort cancel of any jobs that were created before the failure.
+		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		for _, s := range submitted {
+			if s.jobID != "" {
+				if cancelClient, cErr := clientWithCorrelation(cfg, client, s.correlationID); cErr == nil {
+					_, _ = cancelClient.CancelJob(cancelCtx, s.jobID)
+				}
+			}
+		}
+		cancelCancel()
 		return SmokeResult{}, submitErr
 	}
 

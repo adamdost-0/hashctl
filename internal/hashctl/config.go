@@ -119,7 +119,7 @@ func resolveConfig(flags Config, getenv envLookup) (Config, error) {
 		return Config{}, fmt.Errorf("API URL scheme must be http or https")
 	}
 	if parsed.Scheme == "http" && !isLoopbackHost(parsed.Hostname()) {
-		return Config{}, fmt.Errorf("API URL must use https for non-loopback hosts; http is allowed only for localhost, 127.0.0.1, or ::1")
+		return Config{}, fmt.Errorf("API URL must use https for non-loopback hosts; http is allowed only for 127.0.0.1, ::1, or localhost when it resolves entirely to loopback addresses")
 	}
 	if cfg.Timeout <= 0 {
 		return Config{}, fmt.Errorf("timeout must be greater than zero")
@@ -149,11 +149,32 @@ func readConfigFile(path string) (Config, error) {
 }
 
 func isLoopbackHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
+	return resolveIsLoopback(host, net.LookupHost)
+}
+
+// resolveIsLoopback is the testable core. IP literals are checked directly; the name
+// "localhost" is accepted only if every address it resolves to is a loopback address.
+// Any other hostname always returns false. If DNS resolution fails or returns no
+// addresses, the function fails closed (returns false) to preserve HTTPS enforcement.
+func resolveIsLoopback(host string, resolve func(string) ([]string, error)) bool {
 	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	if !strings.EqualFold(host, "localhost") {
+		return false
+	}
+	addrs, err := resolve(host)
+	if err != nil || len(addrs) == 0 {
+		return false
+	}
+	for _, addr := range addrs {
+		parsed := net.ParseIP(addr)
+		if parsed == nil || !parsed.IsLoopback() {
+			return false
+		}
+	}
+	return true
 }
 
 func validateBearerTokenFilePermissions(path string) error {
