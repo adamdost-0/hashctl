@@ -797,7 +797,7 @@ func TestMultiSmokeCancelsCreatedJobsOnPartialFailure(t *testing.T) {
 			case r.Method == http.MethodPost && r.URL.Path == "/job/create":
 				createCount++
 				if createCount <= 2 {
-					id := "job-cancel-" + strings.TrimLeft(strings.TrimLeft(r.Header.Get("x-correlation-id"), "test-cancel"), "-")
+					id := "job-cancel-" + strings.TrimPrefix(strings.TrimPrefix(r.Header.Get("x-correlation-id"), "test-cancel"), "-")
 					createdIDs = append(createdIDs, id)
 					writeJSONResponse(t, w, http.StatusAccepted, jobPayload(id, "hashing"))
 				} else {

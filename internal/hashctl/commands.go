@@ -372,7 +372,7 @@ func readBlobList(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read blob list file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	// Read one byte past the limit so we can detect truncation.
 	data, err := io.ReadAll(io.LimitReader(f, blobListMaxBytes+1))
 	if err != nil {
