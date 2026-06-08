@@ -1,6 +1,7 @@
 package hashctl
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -229,8 +230,7 @@ func (a *app) handleMetaCommand(args []string) (bool, error) {
 	case "help":
 		return true, writeHelp(a.stdout, args[1:])
 	case "version":
-		_, err := fmt.Fprintf(a.stdout, "hashctl %s\n", versionString())
-		return true, err
+		return true, a.print(fmt.Sprintf("hashctl %s\n", versionString()))
 	case "health", "job", "manifest", "sign", "smoke":
 		path := stripHelpFlags(args)
 		if len(path) != len(args) {
@@ -275,11 +275,9 @@ func (a *app) runHealth(ctx context.Context, client *Client, cfg Config, args []
 		return body, nil
 	}
 	if ready {
-		_, err = fmt.Fprintln(a.stdout, "ready")
-	} else {
-		_, err = fmt.Fprintln(a.stdout, "healthy")
+		return nil, a.print("ready\n")
 	}
-	return nil, err
+	return nil, a.print("healthy\n")
 }
 
 func (a *app) runJob(ctx context.Context, client *Client, _ Config, args []string) (any, error) {
@@ -399,11 +397,10 @@ func (a *app) runManifest(ctx context.Context, client *Client, cfg Config, args 
 		if cfg.Output == "json" {
 			return manifestJSONOutput(manifest, includeManifestXML), nil
 		}
-		if err := os.WriteFile(outputFile, []byte(manifest.ManifestXML), 0o600); err != nil {
+		if err := os.WriteFile(outputFile, []byte(redact(manifest.ManifestXML)), 0o600); err != nil {
 			return nil, fmt.Errorf("write manifest file: %w", err)
 		}
-		_, err = fmt.Fprintf(a.stdout, "wrote manifest %s to %s\n", manifest.JobID, outputFile)
-		return nil, err
+		return nil, a.print(fmt.Sprintf("wrote manifest %s to %s\n", manifest.JobID, outputFile))
 	default:
 		return nil, fmt.Errorf("unknown manifest subcommand %q", args[0])
 	}
@@ -502,18 +499,31 @@ func splitFlagName(value string) (string, bool, bool) {
 }
 
 func (a *app) writeHuman(result any) error {
+	var buf bytes.Buffer
+	var err error
 	switch value := result.(type) {
 	case JobRecord:
-		return writeJobSummary(a.stdout, value)
+		err = writeJobSummary(&buf, value)
 	case []JobRecord:
-		return writeJobListSummary(a.stdout, value)
+		err = writeJobListSummary(&buf, value)
 	case ManifestResponse:
-		return writeManifestSummary(a.stdout, value)
+		err = writeManifestSummary(&buf, value)
 	case SignatureResponse:
-		return writeSignatureSummary(a.stdout, value)
+		err = writeSignatureSummary(&buf, value)
 	case SmokeResult:
-		return writeSmokeSummary(a.stdout, value)
+		err = writeSmokeSummary(&buf, value)
 	default:
 		return writeJSON(a.stdout, value)
 	}
+	if err != nil {
+		return err
+	}
+	return writeRedactedText(a.stdout, buf.String())
+}
+
+// print routes a free-form line of stdout text through the redaction choke
+// point so direct-print commands (health, version, the manifest-file
+// confirmation) cannot bypass redaction.
+func (a *app) print(text string) error {
+	return writeRedactedText(a.stdout, text)
 }
