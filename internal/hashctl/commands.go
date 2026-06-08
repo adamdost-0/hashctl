@@ -2,6 +2,7 @@ package hashctl
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -198,7 +199,7 @@ func parseGlobal(args []string) (Config, []string, error) {
 			}
 			cfg.BearerTokenFile = v
 		case "--bearer-token", "-bearer-token":
-			return cfg, nil, fmt.Errorf(literalBearerTokenError)
+			return cfg, nil, errors.New(literalBearerTokenError)
 		case "--poll-interval":
 			v, err := take()
 			if err != nil {
@@ -234,7 +235,7 @@ func rejectLiteralBearerToken(args []string) error {
 	for _, arg := range args {
 		name, _, ok := flagName(arg)
 		if ok && strings.EqualFold(name, "bearer-token") {
-			return fmt.Errorf(literalBearerTokenError)
+			return errors.New(literalBearerTokenError)
 		}
 	}
 	return nil
